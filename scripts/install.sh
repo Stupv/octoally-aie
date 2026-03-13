@@ -2,6 +2,10 @@
 # OpenFlow Installer
 # Downloads a pre-built release, extracts it, and starts the server.
 #
+# Prerequisites (install these first):
+#   - Node.js 20+    https://nodejs.org
+#   - Claude Code     npm install -g @anthropic-ai/claude-code
+#
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/ai-genius-automations/openflow/main/scripts/install.sh | bash
 #   OPENFLOW_VERSION=0.1.0 bash install.sh
@@ -30,7 +34,7 @@ log_warn()  { echo -e "${YELLOW}[OpenFlow]${NC} $1"; }
 log_error() { echo -e "${RED}[OpenFlow]${NC} $1"; }
 log_step()  { echo -e "\n${BOLD}[$1/$TOTAL_STEPS] $2${NC}"; }
 
-TOTAL_STEPS=5
+TOTAL_STEPS=6
 
 # Detect the target user (if running as root via sudo, install for the real user)
 if [ "$(id -u)" -eq 0 ] && [ -n "${SUDO_USER:-}" ]; then
@@ -45,90 +49,29 @@ else
   TARGET_HOME="$HOME"
 fi
 
+OS="$(uname -s)"
+
 # --- Step 1: Check prerequisites ---------------------------------------------
 
 log_step 1 "Checking prerequisites..."
 
-OS="$(uname -s)"
-
-# Install Node.js if missing (the only system dep we need at runtime)
-install_node_if_needed() {
-  local NEED_NODE=false
-  if ! command -v node &>/dev/null; then
-    NEED_NODE=true
-  else
-    local NODE_MAJOR
-    NODE_MAJOR=$(node -e "console.log(process.versions.node.split('.')[0])")
-    if [ "$NODE_MAJOR" -lt 20 ]; then
-      NEED_NODE=true
-      log_warn "Node.js $NODE_MAJOR found, need 20+..."
-    fi
-  fi
-
-  if [ "$NEED_NODE" = false ]; then return 0; fi
-
-  case "$OS" in
-    Linux*)
-      log_info "Installing Node.js 22..."
-      apt-get update -qq
-      apt-get install -y -qq ca-certificates curl gnupg
-      mkdir -p /etc/apt/keyrings
-      curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg 2>/dev/null || true
-      echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list > /dev/null
-      apt-get update -qq
-      apt-get install -y -qq nodejs
-      ;;
-    Darwin*)
-      if command -v brew &>/dev/null; then
-        log_info "Installing Node.js via Homebrew..."
-        brew install node 2>&1 | tail -1
-      else
-        log_error "Install Node.js 20+ first: https://nodejs.org"
-        exit 1
-      fi
-      ;;
-  esac
-}
-
-# Install runtime deps if missing
-install_runtime_deps() {
-  local NEEDED=()
-  command -v tmux &>/dev/null  || NEEDED+=(tmux)
-  command -v dtach &>/dev/null || NEEDED+=(dtach)
-  command -v curl &>/dev/null  || NEEDED+=(curl)
-
-  case "$OS" in
-    Linux*)
-      # build-essential needed for native module compilation (better-sqlite3)
-      command -v make &>/dev/null || NEEDED+=(build-essential)
-      command -v g++ &>/dev/null  || NEEDED+=(build-essential)
-      # Deduplicate
-      NEEDED=($(echo "${NEEDED[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' '))
-      ;;
-  esac
-
-  if [ ${#NEEDED[@]} -eq 0 ]; then return 0; fi
-
-  case "$OS" in
-    Linux*)
-      log_info "Installing: ${NEEDED[*]}..."
-      apt-get update -qq
-      apt-get install -y -qq "${NEEDED[@]}"
-      ;;
-    Darwin*)
-      if command -v brew &>/dev/null; then
-        brew install "${NEEDED[@]}" 2>&1 | tail -1
-      fi
-      ;;
-  esac
-}
-
-install_node_if_needed
-install_runtime_deps
-
-# Verify Node
+# Check Node.js
 if ! command -v node &>/dev/null; then
-  log_error "Node.js is required. Install Node.js 20+ and re-run."
+  log_error "Node.js is required but not installed."
+  echo ""
+  echo "  Install Node.js 20+ first: https://nodejs.org"
+  echo "  Then re-run this installer."
+  echo ""
+  exit 1
+fi
+
+NODE_MAJOR=$(node -e "console.log(process.versions.node.split('.')[0])")
+if [ "$NODE_MAJOR" -lt 20 ]; then
+  log_error "Node.js 20+ required (found v$(node -v))"
+  echo ""
+  echo "  Upgrade Node.js: https://nodejs.org"
+  echo "  Then re-run this installer."
+  echo ""
   exit 1
 fi
 
@@ -141,6 +84,32 @@ if ! command -v claude &>/dev/null; then
   echo ""
   exit 1
 fi
+
+# Install runtime deps if missing (tmux, dtach, curl, build tools)
+NEEDED=()
+command -v tmux &>/dev/null  || NEEDED+=(tmux)
+command -v dtach &>/dev/null || NEEDED+=(dtach)
+command -v curl &>/dev/null  || NEEDED+=(curl)
+
+case "$OS" in
+  Linux*)
+    command -v make &>/dev/null || NEEDED+=(build-essential)
+    command -v g++ &>/dev/null  || NEEDED+=(build-essential)
+    # Deduplicate
+    if [ ${#NEEDED[@]} -gt 0 ]; then
+      NEEDED=($(echo "${NEEDED[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' '))
+      log_info "Installing: ${NEEDED[*]}..."
+      apt-get update -qq
+      apt-get install -y -qq "${NEEDED[@]}"
+    fi
+    ;;
+  Darwin*)
+    if [ ${#NEEDED[@]} -gt 0 ] && command -v brew &>/dev/null; then
+      log_info "Installing: ${NEEDED[*]}..."
+      brew install "${NEEDED[@]}" 2>&1 | tail -1
+    fi
+    ;;
+esac
 
 log_ok "Prerequisites met (Node $(node -v), Claude Code $(claude --version 2>/dev/null || echo 'ok'))"
 
@@ -156,7 +125,6 @@ if [ -z "$ARCHIVE_URL" ]; then
     log_info "Fetching latest release from GitHub..."
     RELEASE_INFO=$(curl -sf "https://api.github.com/repos/$GITHUB_REPO/releases/latest" 2>/dev/null || echo "")
     if [ -z "$RELEASE_INFO" ]; then
-      # No release yet — fall back to latest tag
       RELEASE_INFO=$(curl -sf "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null | node -e '
         let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{
           try{const a=JSON.parse(d);if(a[0])console.log(JSON.stringify(a[0]))}catch{}
@@ -169,7 +137,6 @@ if [ -z "$ARCHIVE_URL" ]; then
     VERSION=$(echo "$RELEASE_INFO" | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{try{console.log(JSON.parse(d).tag_name.replace(/^v/,""))}catch{process.exit(1)}})' 2>/dev/null)
   fi
 
-  # Look for the tar.gz asset in the release
   ARCHIVE_URL="https://github.com/$GITHUB_REPO/releases/download/v${VERSION}/openflow-v${VERSION}.tar.gz"
 fi
 
@@ -197,12 +164,11 @@ if [ -f "$INSTALL_DIR/.openflow.pid" ]; then
   fi
 fi
 
-# Extract (archive contains openflow-vX.Y.Z/ directory)
+# Extract
 EXTRACT_DIR=$(mktemp -d)
 tar xzf "$TMPFILE" -C "$EXTRACT_DIR"
 rm -f "$TMPFILE"
 
-# Find the extracted directory
 EXTRACTED=$(ls -d "$EXTRACT_DIR"/openflow-* 2>/dev/null | head -1)
 if [ -z "$EXTRACTED" ] || [ ! -d "$EXTRACTED" ]; then
   log_error "Archive does not contain expected openflow-vX.Y.Z directory"
@@ -210,9 +176,8 @@ if [ -z "$EXTRACTED" ] || [ ! -d "$EXTRACTED" ]; then
   exit 1
 fi
 
-# Move into place (preserve logs and config from existing install)
+# Preserve user data from existing install
 if [ -d "$INSTALL_DIR" ]; then
-  # Preserve user data
   for keep in logs .openflow .openflow.pid; do
     [ -e "$INSTALL_DIR/$keep" ] && cp -r "$INSTALL_DIR/$keep" "$EXTRACT_DIR/_keep_$keep" 2>/dev/null || true
   done
@@ -221,7 +186,6 @@ fi
 
 mv "$EXTRACTED" "$INSTALL_DIR"
 
-# Restore preserved data
 for keep in logs .openflow .openflow.pid; do
   [ -e "$EXTRACT_DIR/_keep_$keep" ] && mv "$EXTRACT_DIR/_keep_$keep" "$INSTALL_DIR/$keep" 2>/dev/null || true
 done
@@ -229,15 +193,14 @@ rm -rf "$EXTRACT_DIR"
 
 mkdir -p "$INSTALL_DIR/logs"
 
-# Read actual version from the installed package
+# Read version from installed package
 if [ -f "$INSTALL_DIR/version.json" ]; then
   VERSION=$(node -e "console.log(require('$INSTALL_DIR/version.json').version)" 2>/dev/null || echo "$VERSION")
 fi
 
-# Install server production dependencies (native modules need to compile on this platform)
+# Install server production dependencies (native modules compile on this platform)
 log_info "Installing server dependencies..."
-cd "$INSTALL_DIR/server"
-npm ci --omit=dev 2>&1 | tail -3
+npm ci --omit=dev --prefix "$INSTALL_DIR/server" 2>&1 | tail -3
 
 log_ok "OpenFlow v${VERSION} installed to $INSTALL_DIR"
 
@@ -269,7 +232,7 @@ log_step 5 "Starting OpenFlow..."
 
 # Remove legacy Tauri desktop app if installed
 if command -v dpkg &>/dev/null && dpkg -l open-flow &>/dev/null 2>&1; then
-  log_info "Removing legacy desktop app..."
+  log_info "Removing legacy desktop app (Tauri)..."
   dpkg -r open-flow 2>&1 || true
 fi
 
@@ -278,6 +241,112 @@ if [ "$(id -u)" -eq 0 ] && [ "$TARGET_USER" != "root" ]; then
   su - "$TARGET_USER" -c "PATH=\"$LINK_DIR:\$PATH\" openflow start"
 else
   "$LINK_DIR/openflow" start
+fi
+
+# --- Step 6: Desktop app (optional) ------------------------------------------
+
+log_step 6 "Desktop app..."
+
+# Determine what desktop file we'd look for on this OS
+DESKTOP_URL="${OPENFLOW_DESKTOP_URL:-}"
+DESKTOP_FILE=""
+DESKTOP_SUPPORTED=true
+
+case "$OS" in
+  Linux*)
+    DESKTOP_FILE="openflow-desktop_${VERSION}_amd64.deb"
+    ;;
+  Darwin*)
+    DESKTOP_FILE="OpenFlow-${VERSION}.dmg"
+    ;;
+  *)
+    DESKTOP_SUPPORTED=false
+    ;;
+esac
+
+if [ -z "$DESKTOP_URL" ] && [ -n "$DESKTOP_FILE" ]; then
+  DESKTOP_URL="https://github.com/$GITHUB_REPO/releases/download/v${VERSION}/${DESKTOP_FILE}"
+fi
+
+# Check if the desktop binary actually exists (HEAD request, no download)
+DESKTOP_AVAILABLE=false
+if [ "$DESKTOP_SUPPORTED" = true ] && [ -n "$DESKTOP_URL" ]; then
+  if [[ "$DESKTOP_URL" == file://* ]]; then
+    # Local file — check if it exists
+    local_path="${DESKTOP_URL#file://}"
+    [ -f "$local_path" ] && DESKTOP_AVAILABLE=true
+  else
+    # Remote URL — check with HEAD request
+    if curl -sfIL --max-time 5 "$DESKTOP_URL" >/dev/null 2>&1; then
+      DESKTOP_AVAILABLE=true
+    fi
+  fi
+fi
+
+install_desktop_app() {
+  local TMPDESKTOP
+  TMPDESKTOP=$(mktemp)
+  log_info "Downloading desktop app..."
+  if ! curl -fSL --progress-bar -o "$TMPDESKTOP" "$DESKTOP_URL" 2>&1; then
+    rm -f "$TMPDESKTOP"
+    log_warn "Desktop app download failed — skipping (you can install it later)"
+    return 0
+  fi
+
+  case "$OS" in
+    Linux*)
+      log_info "Installing desktop app (.deb)..."
+      if [ "$(id -u)" -eq 0 ]; then
+        dpkg -i "$TMPDESKTOP" 2>&1 || apt-get install -f -y -qq 2>&1
+      else
+        sudo dpkg -i "$TMPDESKTOP" 2>&1 || sudo apt-get install -f -y -qq 2>&1
+      fi
+      rm -f "$TMPDESKTOP"
+      log_ok "Desktop app installed (launch from app menu or run: openflow-desktop)"
+      ;;
+    Darwin*)
+      log_info "Mounting DMG..."
+      local MOUNT_DIR
+      MOUNT_DIR=$(hdiutil attach "$TMPDESKTOP" -nobrowse -quiet | tail -1 | awk '{print $NF}')
+      if [ -d "$MOUNT_DIR" ]; then
+        cp -R "$MOUNT_DIR"/OpenFlow.app /Applications/ 2>/dev/null || true
+        hdiutil detach "$MOUNT_DIR" -quiet 2>/dev/null || true
+        log_ok "Desktop app installed to /Applications/OpenFlow.app"
+      else
+        log_warn "Failed to mount DMG — install manually from GitHub Releases"
+      fi
+      rm -f "$TMPDESKTOP"
+      ;;
+  esac
+}
+
+if [ "$DESKTOP_SUPPORTED" = false ]; then
+  log_warn "Desktop app is not available for this platform yet"
+elif [ "$DESKTOP_AVAILABLE" = false ]; then
+  case "$OS" in
+    Darwin*)
+      log_info "macOS desktop app is not yet available — coming soon!"
+      log_info "Use the web dashboard at http://localhost:42010 in the meantime."
+      ;;
+    *)
+      log_info "Desktop app not found for this release — use the web dashboard at http://localhost:42010"
+      ;;
+  esac
+elif [ -t 0 ] && [ -t 1 ]; then
+  # Interactive — prompt
+  echo ""
+  echo -n "Install the OpenFlow desktop app? [y/N]: "
+  read -r answer < /dev/tty 2>/dev/null || answer="n"
+  case "$answer" in
+    [yY]|[yY][eE][sS])
+      install_desktop_app
+      ;;
+    *)
+      log_info "Skipped (install later from GitHub Releases)"
+      ;;
+  esac
+else
+  log_info "Desktop app available — run installer interactively to install, or download from GitHub Releases"
 fi
 
 # --- Done --------------------------------------------------------------------
