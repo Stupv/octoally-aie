@@ -346,11 +346,37 @@ chmod +x "$INSTALL_DIR/bin/openflow"
 
 LINK_DIR="/usr/local/bin"
 if [ ! -w "$LINK_DIR" ]; then
-  LINK_DIR="$TARGET_HOME/.local/bin"
-  mkdir -p "$LINK_DIR"
-fi
+  # Try with sudo
+  if $SUDO ln -sf "$INSTALL_DIR/bin/openflow" "$LINK_DIR/openflow" 2>/dev/null; then
+    : # success — symlinked to /usr/local/bin
+  else
+    # Fallback to ~/.local/bin and ensure it's in PATH
+    LINK_DIR="$TARGET_HOME/.local/bin"
+    mkdir -p "$LINK_DIR"
+    ln -sf "$INSTALL_DIR/bin/openflow" "$LINK_DIR/openflow"
 
-ln -sf "$INSTALL_DIR/bin/openflow" "$LINK_DIR/openflow"
+    # Add to PATH if not already there
+    if ! echo "$PATH" | tr ':' '\n' | grep -qx "$LINK_DIR"; then
+      SHELL_RC=""
+      if [ -f "$TARGET_HOME/.bashrc" ]; then
+        SHELL_RC="$TARGET_HOME/.bashrc"
+      elif [ -f "$TARGET_HOME/.zshrc" ]; then
+        SHELL_RC="$TARGET_HOME/.zshrc"
+      elif [ -f "$TARGET_HOME/.profile" ]; then
+        SHELL_RC="$TARGET_HOME/.profile"
+      fi
+      if [ -n "$SHELL_RC" ]; then
+        if ! grep -q '.local/bin' "$SHELL_RC" 2>/dev/null; then
+          echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$SHELL_RC"
+          log_info "Added ~/.local/bin to PATH in $(basename "$SHELL_RC")"
+        fi
+      fi
+      export PATH="$LINK_DIR:$PATH"
+    fi
+  fi
+else
+  ln -sf "$INSTALL_DIR/bin/openflow" "$LINK_DIR/openflow"
+fi
 
 # Fix ownership if running as root for another user
 if [ "$(id -u)" -eq 0 ] && [ "$TARGET_USER" != "root" ]; then
