@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, type Project, type RufloAgent } from '../lib/api';
-import { Play, Loader2, Bot, TerminalSquare, Globe, Users, X, FolderOpen, GitBranch, Cpu, Activity, FileText, RefreshCw, Zap } from 'lucide-react';
+import { Play, Loader2, Bot, TerminalSquare, Globe, Users, X, FolderOpen, GitBranch, Cpu, Activity, FileText, RefreshCw, Zap, Brain, Download } from 'lucide-react';
 import { AgentGuideModal } from './AgentGuide';
 import { ConfirmModal } from './ConfirmModal';
 import { SessionMicButton } from './SessionMicButton';
@@ -253,6 +253,38 @@ export function SessionLauncher({ project, onSessionCreated, onWebPageCreated }:
   const hasAgents = agents.length > 0;
   const needsReinit = rufloInstalled && !hasAgents && agentsData !== undefined;
 
+  // Check DevCortex status
+  const { data: devcortexData } = useQuery({
+    queryKey: ['devcortex-status'],
+    queryFn: () => api.projects.devcortexStatus(),
+    staleTime: 60_000,
+  });
+  const devcortexStatus = devcortexData?.statuses?.[project.id];
+  const devcortexInstalled = devcortexStatus?.installed ?? false;
+  const devcortexEligible = devcortexStatus?.eligible ?? false;
+
+  const devcortexInstallMutation = useMutation({
+    mutationFn: (id: string) => api.projects.devcortexInstall(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['devcortex-status'] });
+    },
+    onError: (err: Error) => {
+      alert(`Failed to install DevCortex: ${err.message}`);
+    },
+  });
+
+  const devcortexUninstallMutation = useMutation({
+    mutationFn: (id: string) => api.projects.devcortexUninstall(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['devcortex-status'] });
+    },
+    onError: (err: Error) => {
+      alert(`Failed to uninstall DevCortex: ${err.message}`);
+    },
+  });
+
+  const devcortexPending = devcortexInstallMutation.isPending || devcortexUninstallMutation.isPending;
+
   // Reinit state
   const [showReinitConfirm, setShowReinitConfirm] = useState(false);
   const [reinitConflicts, setReinitConflicts] = useState<{ settingsJson: boolean; claudeMd: boolean } | null>(null);
@@ -398,6 +430,39 @@ export function SessionLauncher({ project, onSessionCreated, onWebPageCreated }:
                   <Cpu className="w-3 h-3" />
                   RuFlo Not Installed
                 </span>
+              )}
+              {devcortexData?.globalInstalled && devcortexEligible && (
+                devcortexInstalled ? (
+                  <button
+                    onClick={() => devcortexUninstallMutation.mutate(project.id)}
+                    disabled={devcortexPending}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors"
+                    style={{ background: 'rgba(168,85,247,0.15)', color: '#a855f7', border: '1px solid rgba(168,85,247,0.3)' }}
+                    title="Remove DevCortex from this project"
+                  >
+                    {devcortexPending ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <Brain className="w-3 h-3" />
+                    )}
+                    DevCortex Active
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => devcortexInstallMutation.mutate(project.id)}
+                    disabled={devcortexPending}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors"
+                    style={{ background: 'rgba(168,85,247,0.15)', color: '#a855f7', border: '1px solid rgba(168,85,247,0.3)' }}
+                    title="Install DevCortex dev logging for this project"
+                  >
+                    {devcortexPending ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <Download className="w-3 h-3" />
+                    )}
+                    Add DevCortex
+                  </button>
+                )
               )}
             </div>
           </div>

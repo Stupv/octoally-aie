@@ -326,6 +326,105 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
     return { agents: unique };
   });
 
+  // DevCortex status for all projects
+  app.get('/projects/devcortex-status', async () => {
+    const db = getDb();
+    const projects = db.prepare('SELECT id, name, path FROM projects').all() as { id: string; name: string; path: string }[];
+
+    // Check global DevCortex config
+    const globalConfigPath = join(homedir(), '.config', 'devcortex', 'config.json');
+    const globalInstalled = existsSync(globalConfigPath);
+    let globalConfig: { server_url?: string; api_key?: string } | null = null;
+    if (globalInstalled) {
+      try {
+        globalConfig = JSON.parse(readFileSync(globalConfigPath, 'utf-8'));
+      } catch {}
+    }
+
+    const statuses: Record<string, { installed: boolean; eligible: boolean; version?: string }> = {};
+    for (const p of projects) {
+      const isOpenflowProject = p.name.toLowerCase().startsWith('openflow');
+      const devcortexFile = join(p.path, '.devcortex');
+      const installed = existsSync(devcortexFile);
+      let version: string | undefined;
+      if (installed) {
+        try {
+          const data = JSON.parse(readFileSync(devcortexFile, 'utf-8'));
+          version = data.local_version || undefined;
+        } catch {}
+      }
+      statuses[p.id] = {
+        installed,
+        eligible: !isOpenflowProject && globalInstalled,
+        version,
+      };
+    }
+
+    return { globalInstalled, statuses };
+  });
+
+  // Install DevCortex for a project (runs the openflow installer script)
+  app.post<{
+    Params: { id: string };
+  }>('/projects/:id/devcortex-install', async (req, reply) => {
+    const db = getDb();
+    const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id) as Project | undefined;
+    if (!project) return reply.status(404).send({ error: 'Project not found' });
+
+    // Don't allow install on openflow projects
+    if (project.name.toLowerCase().startsWith('openflow')) {
+      return reply.status(400).send({ error: 'DevCortex cannot be installed on OpenFlow projects' });
+    }
+
+    // Read global config for the API key
+    const globalConfigPath = join(homedir(), '.config', 'devcortex', 'config.json');
+    if (!existsSync(globalConfigPath)) {
+      return reply.status(400).send({ error: 'DevCortex global config not found. Run the global setup first.' });
+    }
+
+    let globalConfig: { server_url?: string; api_key?: string };
+    try {
+      globalConfig = JSON.parse(readFileSync(globalConfigPath, 'utf-8'));
+    } catch {
+      return reply.status(500).send({ error: 'Failed to read DevCortex global config' });
+    }
+
+    if (!globalConfig.api_key || !globalConfig.server_url) {
+      return reply.status(400).send({ error: 'DevCortex global config missing api_key or server_url' });
+    }
+
+    // Run the OpenFlow-specific DevCortex installer via curl
+    const installUrl = `${globalConfig.server_url}/api/setup/install-openflow.sh?key=${globalConfig.api_key}`;
+    try {
+      const result = await execFileAsync('bash', ['-c', `curl -fsSL "${installUrl}" | bash`], {
+        cwd: project.path,
+        timeout: 60_000,
+        env: { ...process.env, HOME: homedir() },
+      });
+      return { ok: true, output: result.stdout || 'DevCortex installed' };
+    } catch (err: any) {
+      return reply.status(500).send({ ok: false, error: err.message || 'Install failed', output: err.stderr || '' });
+    }
+  });
+
+  // Uninstall DevCortex from a project (removes .devcortex file)
+  app.delete<{
+    Params: { id: string };
+  }>('/projects/:id/devcortex', async (req, reply) => {
+    const db = getDb();
+    const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id) as Project | undefined;
+    if (!project) return reply.status(404).send({ error: 'Project not found' });
+
+    const devcortexFile = join(project.path, '.devcortex');
+    if (!existsSync(devcortexFile)) {
+      return reply.status(404).send({ error: 'DevCortex not installed on this project' });
+    }
+
+    const { unlink } = await import('fs/promises');
+    await unlink(devcortexFile);
+    return { ok: true };
+  });
+
   // Browse directories (for folder picker UI)
   app.get<{
     Querystring: { path?: string };

@@ -27,6 +27,7 @@ import {
   Terminal,
   Zap,
   Download,
+  Brain,
 } from 'lucide-react';
 import { ConfirmModal } from './ConfirmModal';
 
@@ -1225,6 +1226,14 @@ export function ProjectDashboard({ onOpenProject }: ProjectDashboardProps) {
     staleTime: 5_000, // Short cache so install status updates quickly
   });
 
+  // DevCortex status for all projects
+  const { data: dctxStatusData } = useQuery({
+    queryKey: ['devcortex-status'],
+    queryFn: () => api.projects.devcortexStatus(),
+    enabled: projects.length > 0,
+    staleTime: 60_000,
+  });
+
   const [installingId, setInstallingId] = useState<string | null>(null);
   const [installError, setInstallError] = useState<string | null>(null);
   const [rufloConfirm, setRufloConfirm] = useState<{ id: string; conflicts: { settingsJson: boolean; claudeMd: boolean } } | null>(null);
@@ -1408,17 +1417,30 @@ export function ProjectDashboard({ onOpenProject }: ProjectDashboardProps) {
                   style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
                   onClick={() => onOpenProject(project.id, project.name)}
                 >
-                  {/* RuFlo status bar */}
-                  {cfStatus?.installed && (
+                  {/* RuFlo / DevCortex status bar */}
+                  {(cfStatus?.installed || (dctxStatusData?.globalInstalled && dctxStatusData?.statuses?.[project.id]?.installed)) && (
                     <div
                       className="flex items-center gap-1.5 px-4 py-2"
-                      style={{ background: '#3b82f615', borderBottom: '1px solid #3b82f640' }}
+                      style={{ background: cfStatus?.installed ? '#3b82f615' : '#a855f715', borderBottom: `1px solid ${cfStatus?.installed ? '#3b82f640' : '#a855f740'}` }}
                     >
-                      <Zap className="w-3 h-3 shrink-0" style={{ color: '#60a5fa' }} />
-                      <span className="text-xs font-semibold truncate" style={{ color: '#60a5fa' }}>
-                        RuFlo
-                      </span>
-                      {cfStatus.version && (
+                      {cfStatus?.installed && (
+                        <>
+                          <Zap className="w-3 h-3 shrink-0" style={{ color: '#60a5fa' }} />
+                          <span className="text-xs font-semibold truncate" style={{ color: '#60a5fa' }}>
+                            RuFlo
+                          </span>
+                        </>
+                      )}
+                      {dctxStatusData?.globalInstalled && dctxStatusData?.statuses?.[project.id]?.installed && (
+                        <>
+                          {cfStatus?.installed && <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>+</span>}
+                          <Brain className="w-3 h-3 shrink-0" style={{ color: '#a855f7' }} />
+                          <span className="text-xs font-semibold truncate" style={{ color: '#a855f7' }}>
+                            DevCortex
+                          </span>
+                        </>
+                      )}
+                      {cfStatus?.version && (
                         <span className="text-[10px] font-mono shrink-0" style={{ color: '#60a5fa', opacity: 0.7 }}>
                           v{cfStatus.version}
                         </span>

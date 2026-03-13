@@ -103,6 +103,15 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({}),
       }),
+    devcortexStatus: () =>
+      fetchJSON<DevcortexStatusResponse>('/projects/devcortex-status'),
+    devcortexInstall: (id: string) =>
+      fetchJSON<{ ok: boolean; output: string }>(`/projects/${id}/devcortex-install`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      }),
+    devcortexUninstall: (id: string) =>
+      fetchJSON<{ ok: boolean }>(`/projects/${id}/devcortex`, { method: 'DELETE' }),
   },
   files: {
     list: (path: string, showHidden?: boolean) =>
@@ -320,6 +329,17 @@ export interface RufloProjectStatus {
 
 export interface RufloStatusResponse {
   statuses: Record<string, RufloProjectStatus>;
+}
+
+export interface DevcortexProjectStatus {
+  installed: boolean;
+  eligible: boolean;
+  version?: string;
+}
+
+export interface DevcortexStatusResponse {
+  globalInstalled: boolean;
+  statuses: Record<string, DevcortexProjectStatus>;
 }
 
 export interface BrowseResult {
