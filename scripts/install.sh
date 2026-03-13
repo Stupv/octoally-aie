@@ -90,12 +90,22 @@ install_node_if_needed() {
   esac
 }
 
-# Install tmux + dtach if missing (needed for agent sessions)
+# Install runtime deps if missing
 install_runtime_deps() {
   local NEEDED=()
   command -v tmux &>/dev/null  || NEEDED+=(tmux)
   command -v dtach &>/dev/null || NEEDED+=(dtach)
   command -v curl &>/dev/null  || NEEDED+=(curl)
+
+  case "$OS" in
+    Linux*)
+      # build-essential needed for native module compilation (better-sqlite3)
+      command -v make &>/dev/null || NEEDED+=(build-essential)
+      command -v g++ &>/dev/null  || NEEDED+=(build-essential)
+      # Deduplicate
+      NEEDED=($(echo "${NEEDED[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' '))
+      ;;
+  esac
 
   if [ ${#NEEDED[@]} -eq 0 ]; then return 0; fi
 
@@ -224,7 +234,12 @@ if [ -f "$INSTALL_DIR/version.json" ]; then
   VERSION=$(node -e "console.log(require('$INSTALL_DIR/version.json').version)" 2>/dev/null || echo "$VERSION")
 fi
 
-log_ok "Installed to $INSTALL_DIR"
+# Install server production dependencies (native modules need to compile on this platform)
+log_info "Installing server dependencies..."
+cd "$INSTALL_DIR/server"
+npm ci --omit=dev 2>&1 | tail -3
+
+log_ok "OpenFlow v${VERSION} installed to $INSTALL_DIR"
 
 # --- Step 4: Install CLI -----------------------------------------------------
 

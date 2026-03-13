@@ -38,13 +38,12 @@ npm run build
 echo "  [3/5] Staging release files..."
 mkdir -p "$STAGE_DIR"
 
-# Server: built JS + production node_modules
+# Server: built JS + package files (node_modules installed on target machine
+# because native modules like better-sqlite3 need platform-specific binaries)
 mkdir -p "$STAGE_DIR/server"
 cp -r "$ROOT_DIR/server/dist" "$STAGE_DIR/server/dist"
 cp "$ROOT_DIR/server/package.json" "$STAGE_DIR/server/package.json"
 cp "$ROOT_DIR/server/package-lock.json" "$STAGE_DIR/server/package-lock.json" 2>/dev/null || true
-cd "$STAGE_DIR/server"
-npm ci --omit=dev --ignore-scripts 2>&1 | tail -1
 
 # Dashboard: static build output
 mkdir -p "$STAGE_DIR/dashboard"
