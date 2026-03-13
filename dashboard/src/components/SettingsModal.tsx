@@ -19,7 +19,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
 
   useEffect(() => {
     if (data?.settings) {
-      setRufloCommand(data.settings.ruflo_command || 'npx ruflo@latest');
+      setRufloCommand(data.settings.ruflo_command || '');
     }
   }, [data]);
 

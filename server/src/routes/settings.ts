@@ -1,9 +1,15 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { getDb } from '../db/index.js';
+
+/** Resolve path to ruflo-run.sh from the project root (3 levels up from this file's dist location) */
+const PROJECT_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+const RUFLO_RUN = join(PROJECT_ROOT, 'scripts', 'ruflo-run.sh');
 
 /** Default values for all settings */
 const DEFAULTS: Record<string, string> = {
-  ruflo_command: 'npx ruflo@latest',
+  ruflo_command: `bash ${RUFLO_RUN}`,
 };
 
 export function getSetting(key: string): string {
