@@ -344,9 +344,12 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
     }
 
     for (const dir of cleanupDirs) {
-      // Remove stale claude-flow.config.json
+      // Remove stale claude-flow.config.json (old ruflo v2 format).
+      // The config loader walks cwd → parent → $HOME/.claude-flow/ and warns
+      // "Invalid config … Required" when it finds the old JSON schema.
+      // New ruflo uses .claude-flow/config.yaml — the old JSON is always stale.
       const staleConfig = join(dir, 'claude-flow.config.json');
-      if (existsSync(staleConfig) && existsSync(join(dir, '.claude-flow', 'config.yaml'))) {
+      if (existsSync(staleConfig)) {
         try {
           const { unlink: unlinkAsync } = await import('fs/promises');
           await unlinkAsync(staleConfig);
