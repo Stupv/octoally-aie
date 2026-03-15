@@ -85,6 +85,9 @@ interface SpeechStore {
   // Enter key signal (incremented to trigger Enter in active terminal)
   pendingEnter: number;
 
+  // Utterance timing
+  silenceTimeoutMs: number;
+
   // Error
   error: string | null;
 
@@ -105,6 +108,7 @@ interface SpeechStore {
   setShowDownloadModal: (v: boolean, pendingMode?: 'global' | 'push-to-talk') => void;
   setWhisperInstall: (stage: string | null, percent: number | null, message: string | null) => void;
   setSmartMatching: (v: boolean) => void;
+  setSilenceTimeoutMs: (ms: number) => void;
   setBackend: (backend: 'local' | 'openai' | 'groq') => void;
   setOpenaiApiKey: (key: string) => void;
   setGroqApiKey: (key: string) => void;
@@ -137,6 +141,7 @@ export const useSpeechStore = create<SpeechStore>((set) => ({
   whisperInstallStage: null,
   whisperInstallPercent: null,
   whisperInstallMessage: null,
+  silenceTimeoutMs: 800,
   pendingEnter: 0,
   error: null,
 
@@ -158,6 +163,7 @@ export const useSpeechStore = create<SpeechStore>((set) => ({
   setWhisperInstall: (stage, percent, message) =>
     set({ whisperInstallStage: stage, whisperInstallPercent: percent, whisperInstallMessage: message }),
   setSmartMatching: (v) => set({ smartMatching: v }),
+  setSilenceTimeoutMs: (ms) => set({ silenceTimeoutMs: ms }),
   setBackend: (backend) => set({ backend }),
   setOpenaiApiKey: (key) => set({ openaiApiKey: key }),
   setGroqApiKey: (key) => set({ groqApiKey: key }),
@@ -194,12 +200,13 @@ export async function initSpeechListeners() {
 
   // Load saved config (backend, API key, wake phrase)
   try {
-    const config = await invoke<{ backend: string; openaiApiKey: string; groqApiKey: string; modelSize: string; wakePhrase?: string; smartMatching?: boolean }>('stt_get_config');
+    const config = await invoke<{ backend: string; openaiApiKey: string; groqApiKey: string; modelSize: string; wakePhrase?: string; smartMatching?: boolean; silenceTimeoutMs?: number }>('stt_get_config');
     const store = useSpeechStore.getState();
     store.setBackend(config.backend as 'local' | 'openai' | 'groq');
     store.setOpenaiApiKey(config.openaiApiKey || '');
     store.setGroqApiKey(config.groqApiKey || '');
     store.setSmartMatching(config.smartMatching !== false);
+    if (config.silenceTimeoutMs) store.setSilenceTimeoutMs(config.silenceTimeoutMs);
     if (config.wakePhrase) store.setWakePhrase(config.wakePhrase);
   } catch (e) {
     console.warn('[STT] Failed to load config:', e);
@@ -503,6 +510,18 @@ export async function unloadModel() {
     useSpeechStore.getState().setMicMode('off');
   } catch (e) {
     console.error('[STT] Failed to unload model:', e);
+  }
+}
+
+/** Set the VAD silence timeout (how long to wait after speech stops before sending). */
+export async function setSilenceTimeout(ms: number) {
+  if (!isDesktop) return;
+
+  try {
+    await invoke('stt_set_silence_timeout', { silenceTimeoutMs: ms });
+    useSpeechStore.getState().setSilenceTimeoutMs(ms);
+  } catch (e) {
+    console.error('[STT] Failed to set silence timeout:', e);
   }
 }
 

@@ -9,6 +9,7 @@ import { SessionLauncher } from './SessionLauncher';
 import { WebPageView } from './WebPageView';
 import { api } from '../lib/api';
 import { DesktopUpdateBanner } from './DesktopUpdateBanner';
+import { CloseTabModal } from './CloseTabModal';
 
 interface ProjectViewProps {
   projectId: string;
@@ -169,6 +170,13 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
   const [activeWebPageId, setActiveWebPageId] = useState<string | null>(
     initialized?.activeWebPageId ?? null
   );
+
+  // Close-tab confirmation modal state
+  const [closeConfirm, setCloseConfirm] = useState<{
+    id: string;
+    label: string;
+    type: 'hivemind' | 'terminal' | 'agent';
+  } | null>(null);
 
   // Dismiss grid view and expanded modal when the project tab loses focus
   // so grid terminals don't interfere with other projects' terminal focus
@@ -697,11 +705,14 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          closeTerminal(inst.id);
+                          const type = inst.label.startsWith('Terminal') ? 'terminal'
+                            : inst.label.startsWith('Agent') ? 'agent'
+                            : 'hivemind';
+                          setCloseConfirm({ id: inst.id, label: inst.label, type });
                         }}
                         className="p-0.5 rounded opacity-0 group-hover:opacity-60 hover:opacity-100 transition-opacity mr-1"
                         style={{ color: 'var(--text-secondary)' }}
-                        title="Kill session"
+                        title="Close session"
                       >
                         <X className="w-3 h-3" />
                       </button>
@@ -1120,6 +1131,23 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
           </div>
         </div>
       </div>
+
+      {/* Close tab confirmation modal */}
+      {closeConfirm && (
+        <CloseTabModal
+          label={closeConfirm.label}
+          type={closeConfirm.type}
+          onHide={() => {
+            closeTerminalTab(closeConfirm.id);
+            setCloseConfirm(null);
+          }}
+          onKill={() => {
+            closeTerminal(closeConfirm.id);
+            setCloseConfirm(null);
+          }}
+          onCancel={() => setCloseConfirm(null)}
+        />
+      )}
     </div>
   );
 }

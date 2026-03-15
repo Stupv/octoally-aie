@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Settings, Download, Check, Loader2, X, Cloud, HardDrive, Eye, EyeOff, Ear, Plus, Trash2, Sparkles } from 'lucide-react';
+import { Settings, Download, Check, Loader2, X, Cloud, HardDrive, Eye, EyeOff, Ear, Plus, Trash2, Sparkles, Timer } from 'lucide-react';
 import { invoke } from '../lib/tauri';
-import { useSpeechStore, downloadModel, stopMic, unloadModel, setWakePhrase } from '../lib/speech';
+import { useSpeechStore, downloadModel, stopMic, unloadModel, setWakePhrase, setSilenceTimeout } from '../lib/speech';
 
 interface ModelInfo {
   installed: boolean;
@@ -44,6 +44,7 @@ export function ModelSettingsModal({ onClose }: ModelSettingsModalProps) {
   const whisperInstallStage = useSpeechStore((s) => s.whisperInstallStage);
   const whisperInstallPercent = useSpeechStore((s) => s.whisperInstallPercent);
   const whisperInstallMessage = useSpeechStore((s) => s.whisperInstallMessage);
+  const silenceTimeoutMs = useSpeechStore((s) => s.silenceTimeoutMs);
   const [downloadingModel, setDownloadingModel] = useState<string | null>(null);
 
   // Snapshot of the "committed" backend state when modal opened
@@ -360,6 +361,45 @@ export function ModelSettingsModal({ onClose }: ModelSettingsModalProps) {
               </div>
             </div>
           )}
+
+          {/* Utterance timing (silence timeout) */}
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1.5">
+              <Timer className="w-3 h-3" style={{ color: 'var(--text-secondary)' }} />
+              <label className="text-[10px] font-medium" style={{ color: 'var(--text-secondary)' }}>
+                Utterance Pause Duration
+              </label>
+              <span
+                className="text-[10px] font-mono px-1.5 py-0.5 rounded"
+                style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}
+              >
+                {silenceTimeoutMs}ms
+              </span>
+            </div>
+            <input
+              type="range"
+              min={200}
+              max={3000}
+              step={100}
+              value={silenceTimeoutMs}
+              onChange={(e) => {
+                const ms = parseInt(e.target.value);
+                setSilenceTimeout(ms);
+              }}
+              className="w-full h-1.5 rounded-lg appearance-none cursor-pointer"
+              style={{
+                background: `linear-gradient(to right, var(--accent) 0%, var(--accent) ${((silenceTimeoutMs - 200) / 2800) * 100}%, var(--bg-tertiary) ${((silenceTimeoutMs - 200) / 2800) * 100}%, var(--bg-tertiary) 100%)`,
+                accentColor: 'var(--accent)',
+              }}
+            />
+            <div className="flex justify-between text-[9px]" style={{ color: 'var(--text-secondary)' }}>
+              <span>200ms (fast)</span>
+              <span>3000ms (slow)</span>
+            </div>
+            <p className="text-[10px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+              How long to wait after you stop speaking before sending the audio for transcription. Shorter = more responsive but may cut you off mid-sentence. Longer = waits for natural pauses.
+            </p>
+          </div>
 
           {/* Local backend: whisper binary install progress */}
           {draftBackend === 'local' && whisperInstallStage && (

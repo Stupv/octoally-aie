@@ -62,6 +62,7 @@ interface SttConfig {
   modelSize: string;
   wakePhrase: string;
   smartMatching: boolean;
+  silenceTimeoutMs: number;
   customCommands?: VoiceCommand[];
   builtinOverrides?: Record<string, BuiltinOverride>;
 }
@@ -197,6 +198,7 @@ interface SpeechState {
   groqApiKey: string;
   modelSize: string;
   smartMatching: boolean;
+  silenceTimeoutMs: number;
   whisperBin: string | null;
   audioCapture: AudioCapture | null;
   speaking: boolean;
@@ -216,6 +218,7 @@ const state: SpeechState = {
   groqApiKey: cfg.groqApiKey || '',
   modelSize: cfg.modelSize || 'small',
   smartMatching: cfg.smartMatching !== false, // default true
+  silenceTimeoutMs: cfg.silenceTimeoutMs || 800,
   whisperBin: null,
   audioCapture: null,
   speaking: false,
@@ -403,7 +406,15 @@ export function registerSpeechHandlers() {
     modelSize: state.modelSize,
     wakePhrase: state.wakePhrase,
     smartMatching: state.smartMatching,
+    silenceTimeoutMs: state.silenceTimeoutMs,
   }));
+
+  ipcMain.handle('stt_set_silence_timeout', (_e, args: { silenceTimeoutMs: number }) => {
+    const ms = Math.max(200, Math.min(3000, args.silenceTimeoutMs));
+    state.silenceTimeoutMs = ms;
+    saveConfig({ silenceTimeoutMs: ms });
+    console.error(`[STT] Silence timeout set to: ${ms}ms`);
+  });
 
   ipcMain.handle('stt_set_smart_matching', (_e, args: { enabled: boolean; openaiApiKey?: string }) => {
     state.smartMatching = args.enabled;
@@ -497,7 +508,7 @@ export function registerSpeechHandlers() {
       const cloudApiKey = cloudProvider === 'groq' ? state.groqApiKey : cloudProvider === 'openai' ? state.openaiApiKey : '';
 
       if (!state.audioCapture) {
-        const vad = new VadProcessor(16000);
+        const vad = new VadProcessor(16000, state.silenceTimeoutMs);
         const whisperBin = state.whisperBin;
         const tinyModel = tinyPath;
 
@@ -519,7 +530,7 @@ export function registerSpeechHandlers() {
       }
 
       if (!state.audioCapture) {
-        const vad = new VadProcessor(16000);
+        const vad = new VadProcessor(16000, state.silenceTimeoutMs);
 
         state.audioCapture = new AudioCapture((samples) => {
           const events = vad.process(samples);
@@ -536,7 +547,7 @@ export function registerSpeechHandlers() {
       }
 
       if (!state.audioCapture) {
-        const vad = new VadProcessor(16000);
+        const vad = new VadProcessor(16000, state.silenceTimeoutMs);
         const whisperBin = state.whisperBin;
         const mPath = p;
 

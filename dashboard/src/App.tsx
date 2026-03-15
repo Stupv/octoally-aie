@@ -9,7 +9,7 @@ import { ProjectView, cleanupProjectStorage } from './components/ProjectView';
 import { Zap, X, LayoutGrid, FolderOpen, Monitor, Loader2, Settings, ArrowUpCircle } from 'lucide-react';
 import { isDesktop, getDesktopVersion } from './lib/tauri';
 import { AgentGuideButton } from './components/AgentGuide';
-import { ConfirmModal } from './components/ConfirmModal';
+import { CloseTabModal } from './components/CloseTabModal';
 import { SettingsModal } from './components/SettingsModal';
 import { ActiveTerminals } from './components/ActiveTerminals';
 import { GlobalMicButton } from './components/GlobalMicButton';
@@ -595,12 +595,21 @@ function Dashboard() {
       </main>
 
       {confirmClose && (
-        <ConfirmModal
-          title="Close Project Tab"
-          message={`This will terminate ${confirmClose.count} running terminal${confirmClose.count > 1 ? 's' : ''}. Are you sure you want to close this project?`}
-          confirmLabel="Close & Terminate"
-          variant="danger"
-          onConfirm={confirmCloseProject}
+        <CloseTabModal
+          label={projectTabs.find((t) => t.projectId === confirmClose.projectId)?.projectName || 'Project'}
+          type="project"
+          sessionCount={confirmClose.count}
+          onHide={() => {
+            // Hide the project tab but keep sessions running
+            const { projectId } = confirmClose;
+            cleanupProjectStorage(projectId);
+            setProjectTabs((prev) => prev.filter((t) => t.projectId !== projectId));
+            if (activeTab === `project-${projectId}`) {
+              setActiveTab('home');
+            }
+            setConfirmClose(null);
+          }}
+          onKill={() => confirmCloseProject()}
           onCancel={() => setConfirmClose(null)}
         />
       )}

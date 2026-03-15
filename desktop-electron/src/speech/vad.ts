@@ -6,7 +6,7 @@
 const FRAME_MS = 30;
 const MIN_SPEECH_MS = 300;
 const MAX_SPEECH_MS = 30_000;
-const SILENCE_TIMEOUT_MS = 800;
+const DEFAULT_SILENCE_TIMEOUT_MS = 800;
 const CALIBRATION_FRAMES = 66; // ~2 seconds
 
 export type VadEvent =
@@ -16,6 +16,7 @@ export type VadEvent =
 
 export class VadProcessor {
   private frameSize: number;
+  private silenceTimeoutMs: number;
   private energyThreshold = 0.01;
   private calibrationEnergies: number[] = [];
   private calibrated = false;
@@ -25,8 +26,14 @@ export class VadProcessor {
   private buffer: number[] = [];
   private pending: number[] = [];
 
-  constructor(sampleRate: number) {
+  constructor(sampleRate: number, silenceTimeoutMs?: number) {
     this.frameSize = Math.floor((sampleRate * FRAME_MS) / 1000);
+    this.silenceTimeoutMs = silenceTimeoutMs ?? DEFAULT_SILENCE_TIMEOUT_MS;
+  }
+
+  /** Update the silence timeout dynamically (in milliseconds). */
+  setSilenceTimeout(ms: number) {
+    this.silenceTimeoutMs = ms;
   }
 
   process(samples: Float32Array | number[]): VadEvent[] {
@@ -94,7 +101,7 @@ export class VadProcessor {
       for (let i = 0; i < frame.length; i++) this.buffer.push(frame[i]);
 
       const silenceMs = this.silenceFrames * FRAME_MS;
-      if (silenceMs >= SILENCE_TIMEOUT_MS) {
+      if (silenceMs >= this.silenceTimeoutMs) {
         const speechMs = this.speechFrames * FRAME_MS;
         if (speechMs >= MIN_SPEECH_MS) {
           const utterance = this.finishUtterance();
