@@ -429,14 +429,17 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
   }
 
   // Compute hidden sessions (user hid the tab but process is still running)
+  // Use all sessions (not projectSessions) because project_id filtering may not match
+  // closedSessionIds is already scoped to this ProjectView instance
   const hiddenSessions = useMemo(() => {
     void closedIdsVersion; // depend on version counter so this recomputes when sessions are hidden/unhidden
     if (closedSessionIds.current.size === 0) return [];
-    return projectSessions.filter((s) =>
+    const allSessions = sessionsData?.sessions || [];
+    return allSessions.filter((s: any) =>
       closedSessionIds.current.has(s.id) &&
       (s.status === 'running' || s.status === 'detached')
     );
-  }, [projectSessions, closedIdsVersion]);
+  }, [sessionsData, closedIdsVersion]);
 
   function unhideSession(id: string) {
     closedSessionIds.current.delete(id);
