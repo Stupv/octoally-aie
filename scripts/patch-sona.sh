@@ -58,34 +58,10 @@ check_version_gate() {
 }
 
 # =============================================================================
-# Part 1: Patch hook-handler.cjs to call learning-service.mjs
+# Helper: Write sona-bridge.cjs to the project
 # =============================================================================
-patch_hook_handler() {
-  if [ ! -f "$HOOK_HANDLER" ]; then
-    warn "hook-handler.cjs not found at $HOOK_HANDLER — skipping"
-    return 1
-  fi
-
-  if [ ! -f "$LEARNING_SERVICE" ]; then
-    warn "learning-service.mjs not found — skipping hook-handler patch"
-    return 1
-  fi
-
-  # Check sentinel
-  if grep -q "$HOOK_SENTINEL" "$HOOK_HANDLER" 2>/dev/null; then
-    skip "hook-handler.cjs already patched"
-    return 0
-  fi
-
-  # Back up original
-  cp "$HOOK_HANDLER" "${HOOK_HANDLER}.pre-sona-patch"
-
-  # We need to inject learning-service calls into session-restore, session-end,
-  # and post-task handlers. Since learning-service.mjs is ESM and hook-handler.cjs
-  # is CJS, we call it as a subprocess (same pattern as learning-hooks.sh).
-
-  # Create a CJS wrapper that shells out to learning-service.mjs
-  local wrapper="$PROJECT_PATH/.claude/helpers/sona-bridge.cjs"
+_write_sona_bridge() {
+  local wrapper="$1"
   cat > "$wrapper" << 'BRIDGE_EOF'
 #!/usr/bin/env node
 // SONA_PATCH_v1 — Bridge between CJS hook-handler and ESM learning-service
@@ -172,6 +148,37 @@ module.exports = {
   },
 };
 BRIDGE_EOF
+}
+
+# =============================================================================
+# Part 1: Patch hook-handler.cjs to call learning-service.mjs
+# =============================================================================
+patch_hook_handler() {
+  if [ ! -f "$HOOK_HANDLER" ]; then
+    warn "hook-handler.cjs not found at $HOOK_HANDLER — skipping"
+    return 1
+  fi
+
+  if [ ! -f "$LEARNING_SERVICE" ]; then
+    warn "learning-service.mjs not found — skipping hook-handler patch"
+    return 1
+  fi
+
+  # Always regenerate sona-bridge.cjs (may have been updated)
+  local wrapper="$PROJECT_PATH/.claude/helpers/sona-bridge.cjs"
+
+  # Check sentinel — if already patched, just update the bridge and return
+  if grep -q "$HOOK_SENTINEL" "$HOOK_HANDLER" 2>/dev/null; then
+    _write_sona_bridge "$wrapper"
+    skip "hook-handler.cjs already patched (bridge updated)"
+    return 0
+  fi
+
+  # Back up original
+  cp "$HOOK_HANDLER" "${HOOK_HANDLER}.pre-sona-patch"
+
+  # Write the bridge file
+  _write_sona_bridge "$wrapper"
 
   # Now patch hook-handler.cjs to use the bridge
   # Insert the require after the intelligence require (line ~48)
@@ -346,7 +353,7 @@ ensure_better_sqlite3() {
   for dep in "${DEPS[@]}"; do
     local target="$SHARED_RUFLO/node_modules/$dep"
     local link="$PROJECT_PATH/node_modules/$dep"
-    if [ -d "$target" ] && [ ! -e "$link" ]; then
+    if [ -d "$target" ]; then
       ln -sf "$target" "$link"
       LINKED=$((LINKED + 1))
     fi
