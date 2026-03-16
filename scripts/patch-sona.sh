@@ -207,6 +207,20 @@ BRIDGE_EOF
       \"    // Initialize intelligence graph after session restore\"
     );
 
+    // Patch post-edit to record file edit as SONA pattern
+    content = content.replace(
+      /\/\/ Record edit for intelligence consolidation/,
+      \"// Record edit as SONA pattern\\n\" +
+      \"    if (sonaBridge && sonaBridge.isAvailable && sonaBridge.isAvailable()) {\\n\" +
+      \"      try {\\n\" +
+      \"        const editFile = (hookInput.tool_input && hookInput.tool_input.file_path) || hookInput.file_path\\n\" +
+      \"          || (hookInput.toolInput && hookInput.toolInput.file_path) || '';\\n\" +
+      \"        if (editFile) sonaBridge.storePattern('Edit ' + editFile.split('/').slice(-2).join('/'), 'edit');\\n\" +
+      \"      } catch (e) { /* non-fatal */ }\\n\" +
+      \"    }\\n\" +
+      \"    // Record edit for intelligence consolidation\"
+    );
+
     // Patch session-end to consolidate SONA
     content = content.replace(
       /\/\/ Consolidate intelligence before ending session/,
