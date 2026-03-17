@@ -579,6 +579,15 @@ RUNEOF
   fi
 } '"$HIVECOMMAND_FUNC_END"
 
+# Cross-platform sed -i (BSD sed on macOS requires -i '', GNU sed does not)
+_sed_i() {
+  if [ "$OS" = "Darwin" ]; then
+    sed -i '' "$@"
+  else
+    sed -i "$@"
+  fi
+}
+
 _install_shell_func() {
   local RC_FILE="$1"
   [ ! -f "$RC_FILE" ] && return
@@ -586,10 +595,10 @@ _install_shell_func() {
   # Remove old version if exists (uses end-marker for safe removal)
   if grep -q "$HIVECOMMAND_FUNC_MARKER" "$RC_FILE" 2>/dev/null; then
     if grep -q "$HIVECOMMAND_FUNC_END" "$RC_FILE" 2>/dev/null; then
-      sed -i "/$HIVECOMMAND_FUNC_MARKER/,/$HIVECOMMAND_FUNC_END/d" "$RC_FILE"
+      _sed_i "/$HIVECOMMAND_FUNC_MARKER/,/$HIVECOMMAND_FUNC_END/d" "$RC_FILE"
     else
       # Fallback: remove from marker to closing brace on its own line
-      sed -i "/$HIVECOMMAND_FUNC_MARKER/,/^}/d" "$RC_FILE"
+      _sed_i "/$HIVECOMMAND_FUNC_MARKER/,/^}/d" "$RC_FILE"
     fi
   fi
 
@@ -598,9 +607,9 @@ _install_shell_func() {
   if grep -q "$HIVECOMMAND_FUNC_END" "$RC_FILE" 2>/dev/null && \
      ! grep -q "$HIVECOMMAND_FUNC_MARKER" "$RC_FILE" 2>/dev/null; then
     # Find and remove everything from the orphaned heredoc body to the end marker
-    sed -i "/^trap _cleanup EXIT INT TERM/,/$HIVECOMMAND_FUNC_END/d" "$RC_FILE"
+    _sed_i "/^trap _cleanup EXIT INT TERM/,/$HIVECOMMAND_FUNC_END/d" "$RC_FILE"
     # Clean up any remaining blank lines left behind (collapse runs of >3 blanks)
-    sed -i '/^$/N;/^\n$/N;/^\n\n$/N;/^\n\n\n$/d' "$RC_FILE"
+    _sed_i '/^$/N;/^\n$/N;/^\n\n$/N;/^\n\n\n$/d' "$RC_FILE"
   fi
 
   echo "" >> "$RC_FILE"
