@@ -725,13 +725,29 @@ ESPANSO_EOF
     Darwin*)
       log_info "Mounting DMG..."
       local MOUNT_DIR
-      MOUNT_DIR=$(hdiutil attach "$TMPDESKTOP" -nobrowse -quiet | tail -1 | awk '{print $NF}')
-      if [ -d "$MOUNT_DIR" ]; then
-        # Remove existing app first — cp -R merges into .app bundles instead of replacing
-        rm -rf /Applications/HiveCommand.app 2>/dev/null || true
-        cp -R "$MOUNT_DIR"/HiveCommand.app /Applications/ 2>/dev/null || true
+      # hdiutil -plist gives reliable XML output; extract mount point from it
+      local HDIUTIL_OUT
+      HDIUTIL_OUT=$(hdiutil attach "$TMPDESKTOP" -nobrowse -plist 2>/dev/null || echo "")
+      if [ -n "$HDIUTIL_OUT" ]; then
+        MOUNT_DIR=$(echo "$HDIUTIL_OUT" | grep -A1 'mount-point' | grep '<string>' | sed 's/.*<string>\(.*\)<\/string>.*/\1/' | head -1)
+      fi
+      if [ -n "$MOUNT_DIR" ] && [ -d "$MOUNT_DIR" ]; then
+        # Find the .app inside the mounted DMG
+        local APP_PATH
+        APP_PATH=$(find "$MOUNT_DIR" -maxdepth 1 -name "*.app" -type d | head -1)
+        if [ -n "$APP_PATH" ]; then
+          local APP_NAME
+          APP_NAME=$(basename "$APP_PATH")
+          rm -rf "/Applications/$APP_NAME" 2>/dev/null || true
+          if cp -R "$APP_PATH" /Applications/; then
+            log_ok "Desktop app installed to /Applications/$APP_NAME"
+          else
+            log_warn "Failed to copy app to /Applications — install manually from the DMG"
+          fi
+        else
+          log_warn "No .app found in DMG — install manually from GitHub Releases"
+        fi
         hdiutil detach "$MOUNT_DIR" -quiet 2>/dev/null || true
-        log_ok "Desktop app installed to /Applications/HiveCommand.app"
       else
         log_warn "Failed to mount DMG — install manually from GitHub Releases"
       fi
