@@ -255,22 +255,42 @@ app.whenReady().then(async () => {
               res.end(`<!DOCTYPE html>
 <html><head><title>Sign-in Complete</title>
 <style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, system-ui, sans-serif; display: flex;
-    justify-content: center; align-items: center; height: 100vh; margin: 0;
-    background: #1a1a2e; color: #e0e0e0; }
-  .card { text-align: center; padding: 2rem; border-radius: 12px;
-    background: #16213e; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
-  h2 { color: #4ade80; margin-bottom: 0.5rem; }
-  p { color: #94a3b8; }
-  .spinner { width: 24px; height: 24px; border: 3px solid #334155;
-    border-top-color: #4ade80; border-radius: 50%; animation: spin 0.8s linear infinite;
-    margin: 1rem auto; }
+    justify-content: center; align-items: center; height: 100vh;
+    background: #0f1117; color: #e4e8f1; }
+  .card { text-align: center; padding: 2rem 2.5rem; border-radius: 10px;
+    background: #1a1d27; border: 1px solid #2e3340;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4); min-width: 300px; }
+  .logo-wrap { margin-bottom: 0.2rem; }
+  .logo-wrap img { height: 60px; }
+  .logo-fallback { font-size: 0.8rem; font-weight: 700; letter-spacing: 0.05em; color: #e4e8f1; }
+  .divider { height: 1px; background: #2e3340; margin: 1.25rem 0; }
+  .label { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; color: #8b92a8; margin-bottom: 0; }
+  h2 { font-size: 1.05rem; font-weight: 600; color: #e4e8f1; margin-bottom: 0.4rem; }
+  p { font-size: 0.82rem; color: #8b92a8; line-height: 1.5; }
+  .spinner { width: 22px; height: 22px; border: 2px solid #2e3340;
+    border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.7s linear infinite;
+    margin: 1.2rem auto; }
+  .check { width: 40px; height: 40px; border-radius: 50%; background: #1e3a5f;
+    display: none; align-items: center; justify-content: center; margin: 1rem auto; }
+  .check svg { width: 20px; height: 20px; stroke: #3b82f6; stroke-width: 2.5;
+    fill: none; stroke-linecap: round; stroke-linejoin: round; }
   @keyframes spin { to { transform: rotate(360deg); } }
 </style></head>
 <body><div class="card">
-  <h2>Sign-in complete!</h2>
-  <div class="spinner"></div>
-  <p>Transferring session to HiveCommand...<br>You can close this tab.</p>
+  <div class="logo-wrap">
+    <img src="http://localhost:42010/hivecommand-logo.png" alt="HiveCommand"
+         onerror="this.style.display='none';document.querySelector('.logo-fallback').style.display='inline'">
+    <span class="logo-fallback" style="display:none">HiveCommand</span>
+  </div>
+  <div class="label">OAuth Connector</div>
+  <div class="divider"></div>
+  <div class="spinner" id="spinner"></div>
+  <div class="check" id="check"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+  <h2 id="title">Signing in...</h2>
+  <p id="msg">Returning your session to the app.</p>
 </div>
 <script>
   const hash = window.location.hash.substring(1);
@@ -281,14 +301,15 @@ app.whenReady().then(async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(params)
     }).then(() => {
-      document.querySelector('h2').textContent = 'Done!';
-      document.querySelector('p').textContent = 'You can close this tab and return to HiveCommand.';
-      document.querySelector('.spinner').style.display = 'none';
+      document.getElementById('spinner').style.display = 'none';
+      document.getElementById('check').style.display = 'flex';
+      document.getElementById('title').textContent = 'Signed in!';
+      document.getElementById('msg').textContent = 'You can close this tab and return to HiveCommand.';
     });
   } else {
-    document.querySelector('h2').textContent = 'No tokens received';
-    document.querySelector('p').textContent = 'Something went wrong. Try again from HiveCommand.';
-    document.querySelector('.spinner').style.display = 'none';
+    document.getElementById('spinner').style.display = 'none';
+    document.getElementById('title').textContent = 'Sign-in failed';
+    document.getElementById('msg').textContent = 'No session data received. Please try again.';
   }
 </script></body></html>`);
               return;
