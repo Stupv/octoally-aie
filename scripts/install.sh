@@ -727,6 +727,8 @@ ESPANSO_EOF
       local MOUNT_DIR
       MOUNT_DIR=$(hdiutil attach "$TMPDESKTOP" -nobrowse -quiet | tail -1 | awk '{print $NF}')
       if [ -d "$MOUNT_DIR" ]; then
+        # Remove existing app first — cp -R merges into .app bundles instead of replacing
+        rm -rf /Applications/HiveCommand.app 2>/dev/null || true
         cp -R "$MOUNT_DIR"/HiveCommand.app /Applications/ 2>/dev/null || true
         hdiutil detach "$MOUNT_DIR" -quiet 2>/dev/null || true
         log_ok "Desktop app installed to /Applications/HiveCommand.app"
