@@ -1,7 +1,7 @@
 {
   "name": "hivecommand",
   "version": "0.1.19-alpha",
-  "description": "AI coding session orchestration dashboard \u2014 launch, monitor, and manage Claude Code sessions from a web UI",
+  "description": "AI coding session orchestration dashboard — launch, monitor, and manage Claude Code sessions from a web UI",
   "type": "module",
   "scripts": {
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:dashboard\"",
