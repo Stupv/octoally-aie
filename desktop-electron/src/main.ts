@@ -123,11 +123,16 @@ function createWindow() {
     }
   });
 
-  // Close-to-tray: hide window instead of quitting
+  // Close-to-tray: hide window instead of quitting.
+  // When actually quitting (tray → Quit, or app.exit), force-kill after 2s
+  // if the renderer is unresponsive (e.g. server is dead, webview stuck).
   mainWindow.on('close', (event) => {
-    if (!app.isQuitting) {
+    if (!(app as any).isQuitting) {
       event.preventDefault();
       mainWindow?.hide();
+    } else {
+      // Force quit after 2s if renderer doesn't cooperate
+      setTimeout(() => app.exit(0), 2000);
     }
   });
 }

@@ -357,10 +357,13 @@ if command -v fuser &>/dev/null; then
   fuser -k 42010/tcp 2>/dev/null || true
 fi
 
-# Kill running desktop app so the package update doesn't conflict
-pkill -f hivecommand-desktop 2>/dev/null || true
-pkill -f "HiveCommand" 2>/dev/null && log_info "Stopped running desktop app" || true
-sleep 1
+# Kill running desktop app — SIGTERM first, then SIGKILL after 1s.
+# Electron hangs on close when the server is dead (webview stuck reconnecting).
+if pkill -f "hivecommand-desktop" 2>/dev/null; then
+  log_info "Stopping desktop app..."
+  sleep 1
+  pkill -9 -f "hivecommand-desktop" 2>/dev/null || true
+fi
 
 # Extract
 EXTRACT_DIR=$(mktemp -d)
@@ -720,9 +723,11 @@ install_desktop_app() {
 
   # Kill any running desktop app before installing — dpkg replaces the binary
   # while the old process is still running, causing crashes and tray conflicts.
+  # SIGTERM then SIGKILL — Electron hangs on close when server is dead.
   pkill -f "hivecommand-desktop" 2>/dev/null || true
-  pkill -f "[Hh]ive[Cc]ommand.*electron" 2>/dev/null || true
-  sleep 2  # wait for process to fully exit and release tray
+  sleep 1
+  pkill -9 -f "hivecommand-desktop" 2>/dev/null || true
+  sleep 1  # wait for process to fully exit and release tray
 
   case "$OS" in
     Linux*)
