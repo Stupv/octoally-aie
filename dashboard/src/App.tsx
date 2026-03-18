@@ -304,10 +304,19 @@ function Dashboard() {
 
   const [confirmClose, setConfirmClose] = useState<{ projectId: string; count: number } | null>(null);
 
-  const closeProjectTab = useCallback((projectId: string) => {
-    const runningSessions = sessions.filter(
+  const closeProjectTab = useCallback(async (projectId: string) => {
+    // Fetch fresh session list — cached data may be stale (e.g. right after quick-launch)
+    let runningSessions = sessions.filter(
       (s) => s.project_id === projectId && (s.status === 'running' || s.status === 'detached')
     );
+    if (runningSessions.length === 0) {
+      try {
+        const fresh = await api.sessions.list();
+        runningSessions = (fresh.sessions || []).filter(
+          (s: any) => s.project_id === projectId && (s.status === 'running' || s.status === 'detached')
+        );
+      } catch {}
+    }
 
     if (runningSessions.length > 0) {
       setConfirmClose({ projectId, count: runningSessions.length });
@@ -347,23 +356,34 @@ function Dashboard() {
     return () => window.removeEventListener('hivecommand:voice-close-project', handler);
   }, [projects, activeTab, closeProjectTab]);
 
-  function confirmCloseProject() {
+  async function confirmCloseProject() {
     if (!confirmClose) return;
     const { projectId } = confirmClose;
 
-    // Kill all running sessions for this project
-    const runningSessions = sessions.filter(
-      (s) => s.project_id === projectId && (s.status === 'running' || s.status === 'detached')
-    );
-    Promise.all(runningSessions.map((s) => api.sessions.kill(s.id).catch(() => {})))
-      .then(() => queryClient.invalidateQueries({ queryKey: ['sessions'] }));
-
+    // Close tab immediately
     cleanupProjectStorage(projectId);
     setProjectTabs((prev) => prev.filter((t) => t.projectId !== projectId));
     if (activeTab === `project-${projectId}`) {
       setActiveTab('home');
     }
     setConfirmClose(null);
+
+    // Kill sessions in the background — fetch fresh list to catch recently created ones
+    let runningSessions = sessions.filter(
+      (s) => s.project_id === projectId && (s.status === 'running' || s.status === 'detached')
+    );
+    try {
+      const fresh = await api.sessions.list();
+      const freshRunning = (fresh.sessions || []).filter(
+        (s: any) => s.project_id === projectId && (s.status === 'running' || s.status === 'detached')
+      );
+      if (freshRunning.length > runningSessions.length) {
+        runningSessions = freshRunning;
+      }
+    } catch {}
+
+    Promise.all(runningSessions.map((s) => api.sessions.kill(s.id).catch(() => {})))
+      .then(() => queryClient.invalidateQueries({ queryKey: ['sessions'] }));
   }
 
   return (
