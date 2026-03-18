@@ -81,8 +81,10 @@ export function ActiveTerminals({ onBack, onGoToSession, openProjectIds }: Activ
   }, [columns, rows]);
 
   // Force terminal redraw on mount — terminals render before the grid is laid out,
-  // so nudge cardHeight by ±1px after paint to trigger ResizeObserver in each Terminal
+  // so nudge cardHeight by ±1px after paint to trigger ResizeObserver in each Terminal,
+  // then dispatch refresh-terminal at 500ms for reliable refit on all machines
   const [mounted, setMounted] = useState(false);
+  const refreshedRef = useRef(false);
   useEffect(() => {
     const t1 = setTimeout(() => setMounted(true), 50);
     const t2 = setTimeout(() => setMounted(false), 150);
@@ -140,6 +142,20 @@ export function ActiveTerminals({ onBack, onGoToSession, openProjectIds }: Activ
     }
   }
   cards.sort((a, b) => a.groupLabel.localeCompare(b.groupLabel));
+
+  // Dispatch refresh-terminal for all cards once after mount for reliable refit
+  useEffect(() => {
+    if (cards.length === 0 || refreshedRef.current) return;
+    refreshedRef.current = true;
+    const t = setTimeout(() => {
+      for (const { session } of cards) {
+        window.dispatchEvent(new CustomEvent('hivecommand:refresh-terminal', {
+          detail: { sessionId: session.id },
+        }));
+      }
+    }, 500);
+    return () => clearTimeout(t);
+  }, [cards.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const jumpToSession = useCallback((sessionId: string) => {
     setJumpOpen(false);
