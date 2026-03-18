@@ -6,8 +6,8 @@ import { api } from './lib/api';
 import { getPendingTerminalCount, onTerminalConnectionChange } from './components/Terminal';
 import { ProjectDashboard } from './components/ProjectDashboard';
 import { ProjectView, cleanupProjectStorage } from './components/ProjectView';
-import { X, LayoutGrid, FolderOpen, Monitor, Loader2, Settings, ArrowUpCircle } from 'lucide-react';
-import { isDesktop, getDesktopVersion } from './lib/tauri';
+import { X, LayoutGrid, FolderOpen, Monitor, Loader2, Settings, ArrowUpCircle, AlertTriangle } from 'lucide-react';
+import { isDesktop, getDesktopVersion, exitDesktop } from './lib/tauri';
 import { AgentGuideButton } from './components/AgentGuide';
 import { CloseTabModal } from './components/CloseTabModal';
 import { SettingsModal } from './components/SettingsModal';
@@ -106,6 +106,7 @@ function Dashboard() {
     retry: false,
   });
   const [updateDismissed, setUpdateDismissed] = useState(false);
+  const [showUpdateConfirm, setShowUpdateConfirm] = useState(false);
 
   // Desktop app version (Tauri only)
   const [desktopVersion, setDesktopVersion] = useState<string | null>(null);
@@ -119,6 +120,21 @@ function Dashboard() {
 
   const projects = projectsData?.projects || [];
   const sessions = sessionsData?.sessions || [];
+
+  // Trigger the update via server-side endpoint.
+  // The server spawns the installer in a detached process and then exits.
+  // The installer stops the old server, downloads the new version, and restarts.
+  const triggerUpdate = useCallback(async () => {
+    try {
+      await fetch('/api/update', { method: 'POST' });
+    } catch {
+      // Expected — the server exits after triggering the update
+    }
+    // If running in desktop app, quit so the installer can update it
+    if (isDesktop) {
+      setTimeout(() => exitDesktop(), 1000);
+    }
+  }, []);
 
   // Track terminals that are connecting (WS not yet open).
   // Subscribe to the global connection tracker from Terminal.tsx.
@@ -450,15 +466,32 @@ function Dashboard() {
               {' '}is available
               {versionData.name && <span> &mdash; {versionData.name}</span>}
             </span>
+            <button
+              onClick={() => {
+                // Check for running sessions — show confirmation if any exist
+                const runningSessions = sessionsData?.sessions?.filter(
+                  (s) => s.status === 'running' || s.status === 'pending'
+                ) || [];
+                if (runningSessions.length > 0) {
+                  setShowUpdateConfirm(true);
+                } else {
+                  triggerUpdate();
+                }
+              }}
+              className="px-2 py-0.5 rounded text-[10px] font-medium transition-colors hover:brightness-110"
+              style={{ background: 'rgba(96, 165, 250, 0.2)', color: '#60a5fa' }}
+            >
+              Update Now
+            </button>
             {versionData.url && (
               <a
                 href={versionData.url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="px-2 py-0.5 rounded text-[10px] font-medium"
-                style={{ background: 'rgba(96, 165, 250, 0.2)', color: '#60a5fa' }}
+                style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)' }}
               >
-                View Release
+                Release Notes
               </a>
             )}
           </div>
@@ -469,6 +502,53 @@ function Dashboard() {
           >
             <X className="w-3 h-3" />
           </button>
+        </div>
+      )}
+
+      {/* Update confirmation modal */}
+      {showUpdateConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)' }}>
+          <div className="rounded-lg shadow-xl max-w-md w-full mx-4 p-5" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)' }}>
+            <div className="flex items-start gap-3 mb-4">
+              <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" style={{ color: '#facc15' }} />
+              <div>
+                <h3 className="text-sm font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
+                  Update to v{versionData?.latest}?
+                </h3>
+                <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                  You have{' '}
+                  <strong style={{ color: 'var(--text-primary)' }}>
+                    {sessionsData?.sessions?.filter((s) => s.status === 'running' || s.status === 'pending').length || 0} active session(s)
+                  </strong>
+                  . While sessions typically persist across updates, you may want to close them or pop out
+                  into system terminals first to be safe.
+                </p>
+                <p className="text-xs mt-2" style={{ color: 'var(--text-secondary)' }}>
+                  The update will stop the server and restart it with the new version.
+                  {isDesktop && ' The desktop app will also be updated and relaunched.'}
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowUpdateConfirm(false)}
+                className="px-3 py-1.5 rounded text-xs font-medium transition-colors"
+                style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowUpdateConfirm(false);
+                  triggerUpdate();
+                }}
+                className="px-3 py-1.5 rounded text-xs font-medium transition-colors"
+                style={{ background: '#3b82f6', color: 'white' }}
+              >
+                Update Now
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

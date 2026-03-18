@@ -222,6 +222,24 @@ async function start() {
     }
   });
 
+  // Trigger self-update — spawns the installer in a detached process, then exits.
+  // The installer stops the existing server, downloads the new version, and restarts.
+  app.post('/api/update', async (req, reply) => {
+    const { spawn } = await import('child_process');
+    const installUrl = 'https://raw.githubusercontent.com/ai-genius-automations/hivecommand/main/scripts/install.sh';
+    // Spawn detached so it survives server shutdown.
+    // Use HIVECOMMAND_NONINTERACTIVE=1 to skip all interactive prompts.
+    const child = spawn('bash', ['-c', `curl -fsSL "${installUrl}" | HIVECOMMAND_NONINTERACTIVE=1 bash`], {
+      detached: true,
+      stdio: 'ignore',
+      env: { ...process.env, HIVECOMMAND_NONINTERACTIVE: '1' },
+    });
+    child.unref();
+    // Give the child a moment to start, then exit the server
+    reply.send({ ok: true, message: 'Update started. Server will restart shortly.' });
+    setTimeout(() => process.exit(0), 500);
+  });
+
   // Health check — read version from package.json
   let serverVersion = '0.0.0';
   try {

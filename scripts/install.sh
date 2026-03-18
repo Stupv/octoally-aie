@@ -756,10 +756,30 @@ ESPANSO_EOF
   esac
 }
 
+# Detect if desktop app is already installed (upgrade vs. fresh install)
+DESKTOP_ALREADY_INSTALLED=false
+case "$OS" in
+  Linux*)
+    command -v hivecommand-desktop &>/dev/null && DESKTOP_ALREADY_INSTALLED=true
+    dpkg -l hivecommand-desktop &>/dev/null 2>&1 && DESKTOP_ALREADY_INSTALLED=true
+    ;;
+  Darwin*)
+    [ -d "/Applications/HiveCommand.app" ] && DESKTOP_ALREADY_INSTALLED=true
+    ;;
+esac
+
+DESKTOP_INSTALLED_NOW=false
 if [ "$DESKTOP_SUPPORTED" = false ]; then
   log_warn "Desktop app is not available for this platform yet"
 elif [ "$DESKTOP_AVAILABLE" = false ]; then
   log_info "Desktop app not found for this release — download from GitHub Releases or use the web dashboard at http://localhost:42010"
+elif [ "$DESKTOP_ALREADY_INSTALLED" = true ]; then
+  # Already installed — update without asking
+  log_info "Updating desktop app..."
+  install_desktop_app
+  DESKTOP_INSTALLED_NOW=true
+elif [ "${HIVECOMMAND_NONINTERACTIVE:-}" = "1" ]; then
+  log_info "Desktop app available — skipping in non-interactive mode"
 elif [ -e /dev/tty ]; then
   # Interactive — prompt (works even when piped: curl | bash)
   echo ""
@@ -768,6 +788,7 @@ elif [ -e /dev/tty ]; then
   case "$answer" in
     [yY]|[yY][eE][sS])
       install_desktop_app
+      DESKTOP_INSTALLED_NOW=true
       ;;
     *)
       log_info "Skipped (install later from GitHub Releases)"
@@ -780,17 +801,39 @@ fi
 # --- Done --------------------------------------------------------------------
 
 echo ""
-echo -e "${GREEN}${BOLD}HiveCommand v${VERSION} installed and running!${NC}"
+echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${GREEN}${BOLD}  HiveCommand v${VERSION} installed successfully!${NC}"
+echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
-echo "  Dashboard:  http://localhost:42010"
-echo "  CLI:        $LINK_DIR/hivecommand"
-echo "  Install:    $INSTALL_DIR"
+echo -e "  ${BOLD}Dashboard${NC}   http://localhost:42010"
+echo -e "  ${BOLD}CLI${NC}         $LINK_DIR/hivecommand"
+echo -e "  ${BOLD}Install${NC}     $INSTALL_DIR"
+if [ "$DESKTOP_INSTALLED_NOW" = true ]; then
+  echo -e "  ${BOLD}Desktop${NC}     Installed"
+fi
 echo ""
-echo "Commands:"
-echo "  hivecommand                   # Launch hivemind session (CLI)"
-echo "  hivecommand status            # Check status"
-echo "  hivecommand stop              # Stop the server"
-echo "  hivecommand start             # Start the server"
-echo "  hivecommand update            # Update to latest release"
-echo "  hivecommand install-service   # Auto-start on boot"
+echo -e "  ${BOLD}Commands:${NC}"
+echo "    hivecommand                   Launch hivemind session"
+echo "    hivecommand status            Check status"
+echo "    hivecommand stop / start      Stop or start the server"
+echo "    hivecommand update            Update to latest release"
+echo "    hivecommand install-service   Auto-start on boot"
 echo ""
+
+# Auto-launch desktop app if it was just installed/updated
+if [ "$DESKTOP_INSTALLED_NOW" = true ]; then
+  if [ "${HIVECOMMAND_NONINTERACTIVE:-}" = "1" ]; then
+    # Non-interactive (dashboard-triggered update) — launch immediately
+    case "$OS" in
+      Linux*)  nohup hivecommand-desktop &>/dev/null & disown ;;
+      Darwin*) open -a HiveCommand ;;
+    esac
+  elif [ -e /dev/tty ]; then
+    echo -e "  Press ${BOLD}Enter${NC} to launch HiveCommand, or ${BOLD}Ctrl+C${NC} to exit."
+    read -r < /dev/tty 2>/dev/null || true
+    case "$OS" in
+      Linux*)  nohup hivecommand-desktop &>/dev/null & disown ;;
+      Darwin*) open -a HiveCommand ;;
+    esac
+  fi
+fi
