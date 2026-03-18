@@ -222,8 +222,9 @@ async function start() {
     }
   });
 
-  // Trigger self-update — opens a system terminal running the installer, then exits.
-  // The installer (in its own terminal) stops the old server, downloads, and restarts.
+  // Trigger self-update — opens a system terminal running the installer.
+  // The installer itself handles stopping the server, downloading, and restarting.
+  // We do NOT exit here — the installer will kill us when it's ready.
   app.post('/api/update', async (req, reply) => {
     const { spawn, exec } = await import('child_process');
     const installCmd = 'curl -fsSL https://raw.githubusercontent.com/ai-genius-automations/hivecommand/main/scripts/install.sh | bash';
@@ -251,8 +252,6 @@ async function start() {
     }
 
     reply.send({ ok: true, message: 'Update started in external terminal.' });
-    // Give the terminal a moment to spawn, then exit server so installer can replace it
-    setTimeout(() => process.exit(0), 1500);
   });
 
   // Health check — read version from package.json

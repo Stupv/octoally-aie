@@ -7,7 +7,7 @@ import { getPendingTerminalCount, onTerminalConnectionChange } from './component
 import { ProjectDashboard } from './components/ProjectDashboard';
 import { ProjectView, cleanupProjectStorage } from './components/ProjectView';
 import { X, LayoutGrid, FolderOpen, Monitor, Loader2, Settings, ArrowUpCircle, AlertTriangle } from 'lucide-react';
-import { isDesktop, getDesktopVersion, exitDesktop } from './lib/tauri';
+import { isDesktop, getDesktopVersion } from './lib/tauri';
 import { AgentGuideButton } from './components/AgentGuide';
 import { CloseTabModal } from './components/CloseTabModal';
 import { SettingsModal } from './components/SettingsModal';
@@ -122,17 +122,13 @@ function Dashboard() {
   const sessions = sessionsData?.sessions || [];
 
   // Trigger the update via server-side endpoint.
-  // The server spawns the installer in a detached process and then exits.
-  // The installer stops the old server, downloads the new version, and restarts.
+  // The server opens a system terminal running the installer.
+  // The installer handles stopping the server, updating, and restarting everything.
   const triggerUpdate = useCallback(async () => {
     try {
       await fetch('/api/update', { method: 'POST' });
     } catch {
-      // Expected — the server exits after triggering the update
-    }
-    // If running in desktop app, quit so the installer can update it
-    if (isDesktop) {
-      setTimeout(() => exitDesktop(), 1000);
+      // Non-fatal — server may be shutting down
     }
   }, []);
 
