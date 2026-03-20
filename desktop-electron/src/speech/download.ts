@@ -3,10 +3,10 @@
  * Port of desktop/src/speech/download.rs (which uses reqwest).
  */
 
-import * as https from 'https';
-import * as http from 'http';
-import * as fs from 'fs';
-import * as path from 'path';
+import * as https from "https";
+import * as http from "http";
+import * as fs from "fs";
+import * as path from "path";
 
 export interface DownloadProgress {
   percent: number;
@@ -31,7 +31,7 @@ export function downloadFile(
       return;
     }
 
-    const partialPath = destPath + '.partial';
+    const partialPath = destPath + ".partial";
 
     // Ensure directory exists
     const dir = path.dirname(destPath);
@@ -42,14 +42,19 @@ export function downloadFile(
 
     function doRequest(reqUrl: string, redirectCount = 0) {
       if (redirectCount > 5) {
-        reject('Too many redirects');
+        reject("Too many redirects");
         return;
       }
 
-      const client = reqUrl.startsWith('https') ? https : http;
+      const client = reqUrl.startsWith("https") ? https : http;
       const req = client.get(reqUrl, (res) => {
         // Follow redirects
-        if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        if (
+          res.statusCode &&
+          res.statusCode >= 300 &&
+          res.statusCode < 400 &&
+          res.headers.location
+        ) {
           res.resume();
           doRequest(res.headers.location, redirectCount + 1);
           return;
@@ -60,16 +65,18 @@ export function downloadFile(
           return;
         }
 
-        const totalSize = parseInt(res.headers['content-length'] || '0', 10);
+        const totalSize = parseInt(res.headers["content-length"] || "0", 10);
         if (totalSize > 0) {
-          console.error(`[STT] File size: ${(totalSize / 1048576).toFixed(1)} MB`);
+          console.error(
+            `[STT] File size: ${(totalSize / 1048576).toFixed(1)} MB`,
+          );
         }
 
         const file = fs.createWriteStream(partialPath);
         let downloaded = 0;
         let lastPercent = -1;
 
-        res.on('data', (chunk: Buffer) => {
+        res.on("data", (chunk: Buffer) => {
           file.write(chunk);
           downloaded += chunk.length;
 
@@ -86,7 +93,7 @@ export function downloadFile(
           }
         });
 
-        res.on('end', () => {
+        res.on("end", () => {
           file.end(() => {
             // Rename .partial → final
             try {
@@ -106,14 +113,16 @@ export function downloadFile(
           });
         });
 
-        res.on('error', (e) => {
+        res.on("error", (e) => {
           file.end();
-          try { fs.unlinkSync(partialPath); } catch {}
+          try {
+            fs.unlinkSync(partialPath);
+          } catch {}
           reject(`Download error: ${e.message}`);
         });
       });
 
-      req.on('error', (e) => {
+      req.on("error", (e) => {
         reject(`Request error: ${e.message}`);
       });
     }

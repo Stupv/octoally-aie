@@ -4,44 +4,43 @@
  * Auto-downloads and builds whisper.cpp from source on first use.
  */
 
-import { execFile, execSync, spawn } from 'child_process';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
-import { downloadFile } from './download';
+import { execFile, execSync, spawn } from "child_process";
+import * as fs from "fs";
+import * as path from "path";
+import * as os from "os";
+import { downloadFile } from "./download";
 
 const WHISPER_THREADS = 4;
-const WHISPER_VERSION = 'v1.8.3';
+const WHISPER_VERSION = "v1.8.3";
 const WHISPER_SOURCE_URL = `https://github.com/ggml-org/whisper.cpp/archive/refs/tags/${WHISPER_VERSION}.tar.gz`;
 
 export interface WhisperInstallProgress {
-  stage: 'downloading' | 'extracting' | 'building' | 'done' | 'error';
+  stage: "downloading" | "extracting" | "building" | "done" | "error";
   percent: number;
   message: string;
 }
 
 function whisperBinDir(): string {
-  return path.join(os.homedir(), '.octoally', 'bin');
+  return path.join(os.homedir(), ".octoally", "bin");
 }
 
 function whisperBinPath(): string {
-  return path.join(whisperBinDir(), 'whisper-cli');
+  return path.join(whisperBinDir(), "whisper-cli");
 }
 
 /** Find the whisper.cpp binary */
 export function findWhisperBinary(): string | null {
   // Check common names/locations
-  const names = ['whisper-cli', 'whisper-cpp', 'whisper', 'main'];
-  const extraPaths = [
-    whisperBinDir(),
-    '/usr/local/bin',
-    '/usr/bin',
-  ];
+  const names = ["whisper-cli", "whisper-cpp", "whisper", "main"];
+  const extraPaths = [whisperBinDir(), "/usr/local/bin", "/usr/bin"];
 
   for (const name of names) {
     // Check PATH
     try {
-      const result = execSync(`which ${name}`, { encoding: 'utf-8', timeout: 2000 }).trim();
+      const result = execSync(`which ${name}`, {
+        encoding: "utf-8",
+        timeout: 2000,
+      }).trim();
       if (result) return result;
     } catch {}
 
@@ -61,7 +60,7 @@ export function findWhisperBinary(): string | null {
  */
 function checkBuildTools(): string[] {
   const missing: string[] = [];
-  for (const tool of ['cmake', 'make', 'g++']) {
+  for (const tool of ["cmake", "make", "g++"]) {
     try {
       execSync(`which ${tool}`, { timeout: 2000 });
     } catch {
@@ -82,67 +81,93 @@ export async function installWhisperBinary(
 
   // Already installed?
   if (fs.existsSync(destBin)) {
-    onProgress({ stage: 'done', percent: 100, message: 'Already installed' });
+    onProgress({ stage: "done", percent: 100, message: "Already installed" });
     return destBin;
   }
 
   // Check build tools
   const missing = checkBuildTools();
   if (missing.length > 0) {
-    const msg = `Missing build tools: ${missing.join(', ')}. Install with: sudo apt install ${missing.join(' ')}`;
-    onProgress({ stage: 'error', percent: 0, message: msg });
+    const msg = `Missing build tools: ${missing.join(", ")}. Install with: sudo apt install ${missing.join(" ")}`;
+    onProgress({ stage: "error", percent: 0, message: msg });
     throw new Error(msg);
   }
 
   const tmpDir = path.join(os.tmpdir(), `octoally-whisper-build-${Date.now()}`);
   fs.mkdirSync(tmpDir, { recursive: true });
 
-  const tarball = path.join(tmpDir, 'whisper.cpp.tar.gz');
+  const tarball = path.join(tmpDir, "whisper.cpp.tar.gz");
 
   try {
     // Stage 1: Download source tarball
-    onProgress({ stage: 'downloading', percent: 0, message: 'Downloading whisper.cpp source...' });
+    onProgress({
+      stage: "downloading",
+      percent: 0,
+      message: "Downloading whisper.cpp source...",
+    });
 
     await downloadFile(WHISPER_SOURCE_URL, tarball, (p) => {
       onProgress({
-        stage: 'downloading',
+        stage: "downloading",
         percent: Math.round(p.percent * 0.3), // 0-30%
         message: `Downloading: ${(p.bytesDone / 1048576).toFixed(1)} / ${(p.bytesTotal / 1048576).toFixed(1)} MB`,
       });
     });
 
     // Stage 2: Extract
-    onProgress({ stage: 'extracting', percent: 30, message: 'Extracting source...' });
+    onProgress({
+      stage: "extracting",
+      percent: 30,
+      message: "Extracting source...",
+    });
     execSync(`tar xzf "${tarball}" -C "${tmpDir}"`, { timeout: 30000 });
 
     // Find extracted directory (whisper.cpp-1.8.3 or similar)
-    const entries = fs.readdirSync(tmpDir).filter((e) => e.startsWith('whisper'));
+    const entries = fs
+      .readdirSync(tmpDir)
+      .filter((e) => e.startsWith("whisper"));
     if (entries.length === 0) {
-      throw new Error('Failed to find extracted whisper.cpp directory');
+      throw new Error("Failed to find extracted whisper.cpp directory");
     }
     const srcDir = path.join(tmpDir, entries[0]);
 
     // Stage 3: Build with cmake
-    onProgress({ stage: 'building', percent: 35, message: 'Building whisper.cpp (this takes ~30-60s)...' });
+    onProgress({
+      stage: "building",
+      percent: 35,
+      message: "Building whisper.cpp (this takes ~30-60s)...",
+    });
 
-    const buildDir = path.join(srcDir, 'build');
+    const buildDir = path.join(srcDir, "build");
     fs.mkdirSync(buildDir, { recursive: true });
 
     // cmake configure (static link so binary is self-contained)
-    await runCommand('cmake', ['..', '-DCMAKE_BUILD_TYPE=Release', '-DBUILD_SHARED_LIBS=OFF'], { cwd: buildDir });
-    onProgress({ stage: 'building', percent: 50, message: 'Compiling...' });
+    await runCommand(
+      "cmake",
+      ["..", "-DCMAKE_BUILD_TYPE=Release", "-DBUILD_SHARED_LIBS=OFF"],
+      { cwd: buildDir },
+    );
+    onProgress({ stage: "building", percent: 50, message: "Compiling..." });
 
     // cmake build (parallel)
     const cpus = os.cpus().length;
-    await runCommand('cmake', ['--build', '.', '--config', 'Release', '-j', String(cpus)], { cwd: buildDir });
-    onProgress({ stage: 'building', percent: 90, message: 'Installing binary...' });
+    await runCommand(
+      "cmake",
+      ["--build", ".", "--config", "Release", "-j", String(cpus)],
+      { cwd: buildDir },
+    );
+    onProgress({
+      stage: "building",
+      percent: 90,
+      message: "Installing binary...",
+    });
 
     // Find the built binary
     const possibleBins = [
-      path.join(buildDir, 'bin', 'whisper-cli'),
-      path.join(buildDir, 'bin', 'main'),
-      path.join(buildDir, 'whisper-cli'),
-      path.join(buildDir, 'main'),
+      path.join(buildDir, "bin", "whisper-cli"),
+      path.join(buildDir, "bin", "main"),
+      path.join(buildDir, "whisper-cli"),
+      path.join(buildDir, "main"),
     ];
 
     let builtBin: string | null = null;
@@ -154,7 +179,7 @@ export async function installWhisperBinary(
     }
 
     if (!builtBin) {
-      throw new Error('Build succeeded but could not find whisper-cli binary');
+      throw new Error("Build succeeded but could not find whisper-cli binary");
     }
 
     // Copy to ~/.octoally/bin/
@@ -162,7 +187,11 @@ export async function installWhisperBinary(
     fs.copyFileSync(builtBin, destBin);
     fs.chmodSync(destBin, 0o755);
 
-    onProgress({ stage: 'done', percent: 100, message: 'whisper.cpp installed successfully' });
+    onProgress({
+      stage: "done",
+      percent: 100,
+      message: "whisper.cpp installed successfully",
+    });
     console.error(`[STT] Installed whisper binary: ${destBin}`);
 
     return destBin;
@@ -181,28 +210,40 @@ function runCommand(
   opts: { cwd?: string } = {},
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    const proc = spawn(cmd, args, { cwd: opts.cwd, stdio: ['ignore', 'pipe', 'pipe'] });
-    let stderr = '';
+    const proc = spawn(cmd, args, {
+      cwd: opts.cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stderr = "";
 
-    proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString(); });
-    proc.stdout?.on('data', () => {}); // drain
+    proc.stderr?.on("data", (d: Buffer) => {
+      stderr += d.toString();
+    });
+    proc.stdout?.on("data", () => {}); // drain
 
-    proc.on('close', (code) => {
+    proc.on("close", (code) => {
       if (code === 0) {
         resolve();
       } else {
-        reject(new Error(`${cmd} ${args.join(' ')} exited with code ${code}\n${stderr}`));
+        reject(
+          new Error(
+            `${cmd} ${args.join(" ")} exited with code ${code}\n${stderr}`,
+          ),
+        );
       }
     });
 
-    proc.on('error', (e) => reject(e));
+    proc.on("error", (e) => reject(e));
   });
 }
 
 /**
  * Create a WAV buffer from Float32 PCM samples (16kHz mono 16-bit).
  */
-export function createWavBuffer(samples: Float32Array, sampleRate = 16000): Buffer {
+export function createWavBuffer(
+  samples: Float32Array,
+  sampleRate = 16000,
+): Buffer {
   const numChannels = 1;
   const bitsPerSample = 16;
   const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
@@ -213,12 +254,12 @@ export function createWavBuffer(samples: Float32Array, sampleRate = 16000): Buff
   const buffer = Buffer.alloc(headerSize + dataSize);
 
   // RIFF header
-  buffer.write('RIFF', 0);
+  buffer.write("RIFF", 0);
   buffer.writeUInt32LE(36 + dataSize, 4);
-  buffer.write('WAVE', 8);
+  buffer.write("WAVE", 8);
 
   // fmt sub-chunk
-  buffer.write('fmt ', 12);
+  buffer.write("fmt ", 12);
   buffer.writeUInt32LE(16, 16); // sub-chunk size
   buffer.writeUInt16LE(1, 20); // PCM format
   buffer.writeUInt16LE(numChannels, 22);
@@ -228,7 +269,7 @@ export function createWavBuffer(samples: Float32Array, sampleRate = 16000): Buff
   buffer.writeUInt16LE(bitsPerSample, 34);
 
   // data sub-chunk
-  buffer.write('data', 36);
+  buffer.write("data", 36);
   buffer.writeUInt32LE(dataSize, 40);
 
   // Convert float32 to int16
@@ -268,12 +309,16 @@ export function transcribe(
     const start = Date.now();
 
     const args = [
-      '-m', modelPath,
-      '-f', tmpFile,
-      '-t', String(WHISPER_THREADS),
-      '-l', 'en',
-      '--no-timestamps',
-      '-np', // no prints
+      "-m",
+      modelPath,
+      "-f",
+      tmpFile,
+      "-t",
+      String(WHISPER_THREADS),
+      "-l",
+      "en",
+      "--no-timestamps",
+      "-np", // no prints
     ];
 
     execFile(whisperBin, args, { timeout: 60000 }, (err, stdout, stderr) => {
@@ -289,17 +334,21 @@ export function transcribe(
 
       // Parse output — whisper outputs text lines, strip whitespace
       const text = stdout
-        .split('\n')
+        .split("\n")
         .map((l) => l.trim())
-        .filter((l) => l && !l.startsWith('['))
-        .join(' ')
+        .filter((l) => l && !l.startsWith("["))
+        .join(" ")
         .trim();
 
       const elapsed = (Date.now() - start) / 1000;
       if (text) {
-        console.error(`[STT] Transcription (${elapsed.toFixed(1)}s): "${text}"`);
+        console.error(
+          `[STT] Transcription (${elapsed.toFixed(1)}s): "${text}"`,
+        );
       } else {
-        console.error(`[STT] Empty transcription (noise/silence) (${elapsed.toFixed(1)}s)`);
+        console.error(
+          `[STT] Empty transcription (noise/silence) (${elapsed.toFixed(1)}s)`,
+        );
       }
 
       resolve(text);

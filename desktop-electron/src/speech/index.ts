@@ -3,16 +3,16 @@
  * Port of desktop/src/speech/mod.rs.
  */
 
-import { ipcMain, BrowserWindow } from 'electron';
-import * as path from 'path';
-import * as fs from 'fs';
-import * as os from 'os';
+import { ipcMain, BrowserWindow } from "electron";
+import * as path from "path";
+import * as fs from "fs";
+import * as os from "os";
 
-import { VadProcessor, VadEvent } from './vad';
-import { AudioCapture, AudioDevice, listInputDevices } from './audio';
-import { findWhisperBinary, installWhisperBinary, transcribe } from './whisper';
-import { transcribeCloud, CloudProvider } from './cloud-whisper';
-import { downloadFile } from './download';
+import { VadProcessor, VadEvent } from "./vad";
+import { AudioCapture, AudioDevice, listInputDevices } from "./audio";
+import { findWhisperBinary, installWhisperBinary, transcribe } from "./whisper";
+import { transcribeCloud, CloudProvider } from "./cloud-whisper";
+import { downloadFile } from "./download";
 import {
   VoiceCommand,
   CommandMatch,
@@ -21,22 +21,22 @@ import {
   loadCommands,
   getAllCommands,
   getBuiltinDefaults,
-} from './commands';
-import { classifyCommand, ClassifiedCommand } from './command-classifier';
-import { encryptConfig, decryptConfig } from '../crypto-store';
+} from "./commands";
+import { classifyCommand, ClassifiedCommand } from "./command-classifier";
+import { encryptConfig, decryptConfig } from "../crypto-store";
 
 // ---------------------------------------------------------------------------
 // Types (mirror Rust types)
 // ---------------------------------------------------------------------------
 
-type MicMode = 'off' | 'global' | 'push-to-talk' | 'wake-word';
-type SttBackend = 'local' | 'openai' | 'groq';
-type WakeWordPhase = 'passive' | 'active';
+type MicMode = "off" | "global" | "push-to-talk" | "wake-word";
+type SttBackend = "local" | "openai" | "groq";
+type WakeWordPhase = "passive" | "active";
 
 const MODEL_FILES: Record<string, string> = {
-  tiny: 'ggml-tiny.bin',
-  small: 'ggml-small.bin',
-  medium: 'ggml-medium.bin',
+  tiny: "ggml-tiny.bin",
+  small: "ggml-small.bin",
+  medium: "ggml-medium.bin",
 };
 
 function modelDownloadUrl(size: string): string {
@@ -44,7 +44,7 @@ function modelDownloadUrl(size: string): string {
 }
 
 function modelsDir(): string {
-  return path.join(os.homedir(), '.octoally', 'models');
+  return path.join(os.homedir(), ".octoally", "models");
 }
 
 function modelPath(size: string): string {
@@ -68,12 +68,12 @@ interface SttConfig {
 }
 
 function configPath(): string {
-  return path.join(os.homedir(), '.octoally', 'stt-config.json');
+  return path.join(os.homedir(), ".octoally", "stt-config.json");
 }
 
 function loadConfig(): Partial<SttConfig> {
   try {
-    const data = fs.readFileSync(configPath(), 'utf-8');
+    const data = fs.readFileSync(configPath(), "utf-8");
     const raw = JSON.parse(data);
     // Decrypt sensitive fields (API keys)
     return decryptConfig(raw);
@@ -86,7 +86,7 @@ function saveConfig(cfg: Partial<SttConfig>) {
   // Load raw (encrypted) config to avoid double-encrypting
   let existing: Record<string, any> = {};
   try {
-    const data = fs.readFileSync(configPath(), 'utf-8');
+    const data = fs.readFileSync(configPath(), "utf-8");
     existing = JSON.parse(data);
   } catch {}
   // Decrypt existing so merge works on plaintext values
@@ -106,7 +106,7 @@ function saveConfig(cfg: Partial<SttConfig>) {
 function matchesWakePhrase(transcription: string, wakePhrase: string): boolean {
   const normalized = transcription
     .toLowerCase()
-    .replace(/[^\w\s]/g, '')
+    .replace(/[^\w\s]/g, "")
     .trim();
   const phrase = wakePhrase.toLowerCase().trim();
 
@@ -128,20 +128,32 @@ function matchesWakePhrase(transcription: string, wakePhrase: string): boolean {
 
   // Also try joining all words to handle splits/merges
   // e.g., "octo ally" should match "octoally", "heyoctoally" should match "hey octoally"
-  const joinedPhrase = phraseWords.join('');
-  const joinedWords = words.join('');
+  const joinedPhrase = phraseWords.join("");
+  const joinedWords = words.join("");
   if (joinedWords.includes(joinedPhrase)) return true;
 
   // Common tiny model mishearings for "hey octoally"
   // The tiny model often hears fast speech as slightly different words
   const aliases: Record<string, string[]> = {
-    'hey octoally': [
-      'hey octo ally', 'a octoally', 'a octo ally',
-      'hey octoally', 'heyoctoally', 'hey octo ali',
-      'hey octoali', 'hey octoly', 'hey octo lee',
-      'hey octoly', 'hey octo li', 'hey octoally',
-      'hey, octoally', 'hay octoally', 'hey, octo ally',
-      'hey octo alley', 'hey octo al', 'hey octoal',
+    "hey octoally": [
+      "hey octo ally",
+      "a octoally",
+      "a octo ally",
+      "hey octoally",
+      "heyoctoally",
+      "hey octo ali",
+      "hey octoali",
+      "hey octoly",
+      "hey octo lee",
+      "hey octoly",
+      "hey octo li",
+      "hey octoally",
+      "hey, octoally",
+      "hay octoally",
+      "hey, octo ally",
+      "hey octo alley",
+      "hey octo al",
+      "hey octoal",
     ],
   };
 
@@ -150,7 +162,7 @@ function matchesWakePhrase(transcription: string, wakePhrase: string): boolean {
     for (const alias of phraseAliases) {
       if (normalized.includes(alias)) return true;
       // Also check joined version
-      if (joinedWords.includes(alias.replace(/\s+/g, ''))) return true;
+      if (joinedWords.includes(alias.replace(/\s+/g, ""))) return true;
     }
   }
 
@@ -172,7 +184,9 @@ function matchesWakePhrase(transcription: string, wakePhrase: string): boolean {
 function levenshteinDistance(a: string, b: string): number {
   const m = a.length;
   const n = b.length;
-  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+  const dp: number[][] = Array.from({ length: m + 1 }, () =>
+    Array(n + 1).fill(0),
+  );
   for (let i = 0; i <= m; i++) dp[i][0] = i;
   for (let j = 0; j <= n; j++) dp[0][j] = j;
   for (let i = 1; i <= m; i++) {
@@ -213,11 +227,11 @@ interface SpeechState {
 
 const cfg = loadConfig();
 const state: SpeechState = {
-  mode: 'off',
-  backend: (cfg.backend as SttBackend) || 'local',
-  openaiApiKey: cfg.openaiApiKey || '',
-  groqApiKey: cfg.groqApiKey || '',
-  modelSize: cfg.modelSize || 'small',
+  mode: "off",
+  backend: (cfg.backend as SttBackend) || "local",
+  openaiApiKey: cfg.openaiApiKey || "",
+  groqApiKey: cfg.groqApiKey || "",
+  modelSize: cfg.modelSize || "small",
   smartMatching: cfg.smartMatching !== false, // default true
   silenceTimeoutMs: cfg.silenceTimeoutMs || 800,
   whisperBin: null,
@@ -226,8 +240,8 @@ const state: SpeechState = {
   speaking: false,
   lastActivity: Date.now(),
   selectedDevice: undefined,
-  wakePhrase: cfg.wakePhrase || 'hey octoally',
-  wakeWordPhase: 'passive',
+  wakePhrase: cfg.wakePhrase || "hey octoally",
+  wakeWordPhase: "passive",
   activeTimeout: null,
 };
 
@@ -250,25 +264,25 @@ const COMMAND_MODE_TIMEOUT = 30_000; // 30s inactivity before returning to passi
 function resetActiveTimeout() {
   if (state.activeTimeout) clearTimeout(state.activeTimeout);
   state.activeTimeout = setTimeout(() => {
-    console.error('[STT] Command mode timed out after inactivity');
+    console.error("[STT] Command mode timed out after inactivity");
     returnToPassive();
   }, COMMAND_MODE_TIMEOUT);
 }
 
 function enterActivePhase() {
-  state.wakeWordPhase = 'active';
-  emit('stt://wake-word-activated');
-  console.error('[STT] Wake word detected — entering active command mode');
+  state.wakeWordPhase = "active";
+  emit("stt://wake-word-activated");
+  console.error("[STT] Wake word detected — entering active command mode");
   resetActiveTimeout();
 }
 
 function returnToPassive() {
-  state.wakeWordPhase = 'passive';
+  state.wakeWordPhase = "passive";
   if (state.activeTimeout) {
     clearTimeout(state.activeTimeout);
     state.activeTimeout = null;
   }
-  emit('stt://wake-word-passive');
+  emit("stt://wake-word-passive");
 }
 
 // ---------------------------------------------------------------------------
@@ -281,15 +295,19 @@ export function registerSpeechHandlers() {
   if (state.whisperBin) {
     console.error(`[STT] Found whisper binary: ${state.whisperBin}`);
   } else {
-    console.error('[STT] Whisper binary not found — STT will not work until installed');
+    console.error(
+      "[STT] Whisper binary not found — STT will not work until installed",
+    );
   }
 
-  ipcMain.handle('stt_check_model', () => {
+  ipcMain.handle("stt_check_model", () => {
     const p = modelPath(state.modelSize);
     const installed = fs.existsSync(p);
     let sizeBytes: number | null = null;
     if (installed) {
-      try { sizeBytes = fs.statSync(p).size; } catch {}
+      try {
+        sizeBytes = fs.statSync(p).size;
+      } catch {}
     }
     return {
       installed,
@@ -300,14 +318,16 @@ export function registerSpeechHandlers() {
     };
   });
 
-  ipcMain.handle('stt_list_models', () => {
-    const sizes = ['tiny', 'small', 'medium'];
+  ipcMain.handle("stt_list_models", () => {
+    const sizes = ["tiny", "small", "medium"];
     return sizes.map((size) => {
       const p = modelPath(size);
       const installed = fs.existsSync(p);
       let sizeBytes: number | null = null;
       if (installed) {
-        try { sizeBytes = fs.statSync(p).size; } catch {}
+        try {
+          sizeBytes = fs.statSync(p).size;
+        } catch {}
       }
       return {
         installed,
@@ -319,10 +339,12 @@ export function registerSpeechHandlers() {
     });
   });
 
-  ipcMain.handle('stt_set_model', (_e, args: { modelSize: string }) => {
+  ipcMain.handle("stt_set_model", (_e, args: { modelSize: string }) => {
     const size = args.modelSize;
     if (!MODEL_FILES[size]) {
-      throw new Error(`Unknown model size: ${size}. Use tiny, small, or medium.`);
+      throw new Error(
+        `Unknown model size: ${size}. Use tiny, small, or medium.`,
+      );
     }
     const p = modelPath(size);
     if (!fs.existsSync(p)) {
@@ -336,72 +358,89 @@ export function registerSpeechHandlers() {
     stopCapture();
   });
 
-  ipcMain.handle('stt_download_model', async (_e, args: { modelSize: string }) => {
-    const size = args.modelSize;
-    if (!MODEL_FILES[size]) {
-      throw new Error(`Unknown model size: ${size}. Use tiny, small, or medium.`);
-    }
+  ipcMain.handle(
+    "stt_download_model",
+    async (_e, args: { modelSize: string }) => {
+      const size = args.modelSize;
+      if (!MODEL_FILES[size]) {
+        throw new Error(
+          `Unknown model size: ${size}. Use tiny, small, or medium.`,
+        );
+      }
 
-    state.modelSize = size;
-    const p = modelPath(size);
-    const url = modelDownloadUrl(size);
+      state.modelSize = size;
+      const p = modelPath(size);
+      const url = modelDownloadUrl(size);
 
-    await downloadFile(url, p, (progress) => {
-      emit('stt://download-progress', progress);
-    });
-  });
+      await downloadFile(url, p, (progress) => {
+        emit("stt://download-progress", progress);
+      });
+    },
+  );
 
-  ipcMain.handle('stt_install_whisper', async () => {
+  ipcMain.handle("stt_install_whisper", async () => {
     if (state.whisperBin || findWhisperBinary()) {
       state.whisperBin = state.whisperBin || findWhisperBinary();
       return { installed: true, path: state.whisperBin };
     }
 
     const binPath = await installWhisperBinary((progress) => {
-      emit('stt://whisper-install-progress', progress);
+      emit("stt://whisper-install-progress", progress);
     });
 
     state.whisperBin = binPath;
     return { installed: true, path: binPath };
   });
 
-  ipcMain.handle('stt_check_whisper', () => {
+  ipcMain.handle("stt_check_whisper", () => {
     const bin = state.whisperBin || findWhisperBinary();
     return { installed: !!bin, path: bin };
   });
 
-  ipcMain.handle('stt_set_backend', (_e, args: { backend: string; openaiApiKey?: string; groqApiKey?: string }) => {
-    const backend = args.backend as SttBackend;
-    if (backend !== 'local' && backend !== 'openai' && backend !== 'groq') {
-      throw new Error(`Unknown backend: ${backend}. Use 'local', 'openai', or 'groq'.`);
-    }
+  ipcMain.handle(
+    "stt_set_backend",
+    (
+      _e,
+      args: { backend: string; openaiApiKey?: string; groqApiKey?: string },
+    ) => {
+      const backend = args.backend as SttBackend;
+      if (backend !== "local" && backend !== "openai" && backend !== "groq") {
+        throw new Error(
+          `Unknown backend: ${backend}. Use 'local', 'openai', or 'groq'.`,
+        );
+      }
 
-    if (backend === 'openai' && !args.openaiApiKey && !state.openaiApiKey) {
-      throw new Error('OpenAI API key is required for cloud transcription.');
-    }
-    if (backend === 'groq' && !args.groqApiKey && !state.groqApiKey) {
-      throw new Error('Groq API key is required for Groq transcription.');
-    }
+      if (backend === "openai" && !args.openaiApiKey && !state.openaiApiKey) {
+        throw new Error("OpenAI API key is required for cloud transcription.");
+      }
+      if (backend === "groq" && !args.groqApiKey && !state.groqApiKey) {
+        throw new Error("Groq API key is required for Groq transcription.");
+      }
 
-    // Stop capture if switching backends while running
-    if (state.mode !== 'off' && backend !== state.backend) {
-      stopCapture();
-    }
+      // Stop capture if switching backends while running
+      if (state.mode !== "off" && backend !== state.backend) {
+        stopCapture();
+      }
 
-    state.backend = backend;
-    if (args.openaiApiKey !== undefined) {
-      state.openaiApiKey = args.openaiApiKey;
-    }
-    if (args.groqApiKey !== undefined) {
-      state.groqApiKey = args.groqApiKey;
-    }
+      state.backend = backend;
+      if (args.openaiApiKey !== undefined) {
+        state.openaiApiKey = args.openaiApiKey;
+      }
+      if (args.groqApiKey !== undefined) {
+        state.groqApiKey = args.groqApiKey;
+      }
 
-    // Persist
-    saveConfig({ backend, openaiApiKey: state.openaiApiKey, groqApiKey: state.groqApiKey });
-    console.error(`[STT] Backend set to: ${backend}`);
-  });
+      // Persist
+      saveConfig({
+        backend,
+        openaiApiKey: state.openaiApiKey,
+        groqApiKey: state.groqApiKey,
+      });
+      console.error(`[STT] Backend set to: ${backend}`);
+    },
+  );
 
-  ipcMain.handle('stt_get_config', () => ({
+  ipcMain.handle("stt_get_config", () => ({
     backend: state.backend,
     openaiApiKey: state.openaiApiKey,
     groqApiKey: state.groqApiKey,
@@ -411,103 +450,138 @@ export function registerSpeechHandlers() {
     silenceTimeoutMs: state.silenceTimeoutMs,
   }));
 
-  ipcMain.handle('stt_set_silence_timeout', (_e, args: { silenceTimeoutMs: number }) => {
-    const ms = Math.max(200, Math.min(5000, args.silenceTimeoutMs));
-    state.silenceTimeoutMs = ms;
-    saveConfig({ silenceTimeoutMs: ms });
-    console.error(`[STT] Silence timeout set to: ${ms}ms`);
-  });
+  ipcMain.handle(
+    "stt_set_silence_timeout",
+    (_e, args: { silenceTimeoutMs: number }) => {
+      const ms = Math.max(200, Math.min(5000, args.silenceTimeoutMs));
+      state.silenceTimeoutMs = ms;
+      saveConfig({ silenceTimeoutMs: ms });
+      console.error(`[STT] Silence timeout set to: ${ms}ms`);
+    },
+  );
 
-  ipcMain.handle('stt_set_smart_matching', (_e, args: { enabled: boolean; openaiApiKey?: string }) => {
-    state.smartMatching = args.enabled;
-    if (args.openaiApiKey !== undefined) {
-      state.openaiApiKey = args.openaiApiKey;
-    }
-    saveConfig({ smartMatching: args.enabled, openaiApiKey: state.openaiApiKey });
-    console.error(`[STT] Smart matching: ${args.enabled ? 'enabled' : 'disabled'}`);
-  });
+  ipcMain.handle(
+    "stt_set_smart_matching",
+    (_e, args: { enabled: boolean; openaiApiKey?: string }) => {
+      state.smartMatching = args.enabled;
+      if (args.openaiApiKey !== undefined) {
+        state.openaiApiKey = args.openaiApiKey;
+      }
+      saveConfig({
+        smartMatching: args.enabled,
+        openaiApiKey: state.openaiApiKey,
+      });
+      console.error(
+        `[STT] Smart matching: ${args.enabled ? "enabled" : "disabled"}`,
+      );
+    },
+  );
 
-  ipcMain.handle('stt_enter_command_mode', () => {
-    if (state.mode === 'wake-word') {
+  ipcMain.handle("stt_enter_command_mode", () => {
+    if (state.mode === "wake-word") {
       enterActivePhase();
     }
   });
 
-  ipcMain.handle('stt_set_wake_phrase', (_e, args: { wakePhrase: string }) => {
-    const phrase = (args.wakePhrase || '').trim();
+  ipcMain.handle("stt_set_wake_phrase", (_e, args: { wakePhrase: string }) => {
+    const phrase = (args.wakePhrase || "").trim();
     if (!phrase) {
-      throw new Error('Wake phrase cannot be empty.');
+      throw new Error("Wake phrase cannot be empty.");
     }
     state.wakePhrase = phrase;
     saveConfig({ wakePhrase: phrase });
     console.error(`[STT] Wake phrase set to: "${phrase}"`);
   });
 
-  ipcMain.handle('stt_get_voice_commands', () => {
+  ipcMain.handle("stt_get_voice_commands", () => {
     return {
       commands: getAllCommands(),
       builtinDefaults: getBuiltinDefaults(),
     };
   });
 
-  ipcMain.handle('stt_set_voice_commands', (_e, args: {
-    customCommands: VoiceCommand[];
-    builtinOverrides: Record<string, BuiltinOverride>;
-  }) => {
-    loadCommands(args.customCommands, args.builtinOverrides);
-    saveConfig({
-      customCommands: args.customCommands,
-      builtinOverrides: args.builtinOverrides,
-    });
-    console.error(`[STT] Voice commands updated: ${args.customCommands.length} custom, ${Object.keys(args.builtinOverrides).length} overrides`);
-  });
+  ipcMain.handle(
+    "stt_set_voice_commands",
+    (
+      _e,
+      args: {
+        customCommands: VoiceCommand[];
+        builtinOverrides: Record<string, BuiltinOverride>;
+      },
+    ) => {
+      loadCommands(args.customCommands, args.builtinOverrides);
+      saveConfig({
+        customCommands: args.customCommands,
+        builtinOverrides: args.builtinOverrides,
+      });
+      console.error(
+        `[STT] Voice commands updated: ${args.customCommands.length} custom, ${Object.keys(args.builtinOverrides).length} overrides`,
+      );
+    },
+  );
 
-  ipcMain.handle('stt_start', async (_e, args: { mode: string }) => {
+  ipcMain.handle("stt_start", async (_e, args: { mode: string }) => {
     const mode = args.mode as MicMode;
-    if (mode !== 'global' && mode !== 'push-to-talk' && mode !== 'wake-word') {
-      throw new Error(`Unknown mode: ${mode}. Use 'global', 'push-to-talk', or 'wake-word'.`);
+    if (mode !== "global" && mode !== "push-to-talk" && mode !== "wake-word") {
+      throw new Error(
+        `Unknown mode: ${mode}. Use 'global', 'push-to-talk', or 'wake-word'.`,
+      );
     }
 
     // Ensure whisper binary exists (needed for all modes)
     if (!state.whisperBin) {
       state.whisperBin = findWhisperBinary();
       if (!state.whisperBin) {
-        emit('stt://whisper-install-progress', {
-          stage: 'downloading',
+        emit("stt://whisper-install-progress", {
+          stage: "downloading",
           percent: 0,
-          message: 'whisper.cpp not found — downloading and building...',
+          message: "whisper.cpp not found — downloading and building...",
         });
 
         try {
           state.whisperBin = await installWhisperBinary((progress) => {
-            emit('stt://whisper-install-progress', progress);
+            emit("stt://whisper-install-progress", progress);
           });
         } catch (e) {
           throw new Error(
             `Failed to auto-install whisper.cpp: ${e}. ` +
-            'You can install manually: sudo apt install cmake g++ && ' +
-            'or place whisper-cli in ~/.octoally/bin/',
+              "You can install manually: sudo apt install cmake g++ && " +
+              "or place whisper-cli in ~/.octoally/bin/",
           );
         }
       }
     }
 
-    if (mode === 'wake-word') {
+    if (mode === "wake-word") {
       // Wake word mode: need tiny model for wake detection
-      const tinyPath = modelPath('tiny');
+      const tinyPath = modelPath("tiny");
       if (!fs.existsSync(tinyPath)) {
         // Auto-download tiny model (75MB, fast)
-        console.error('[STT] Tiny model not found — downloading for wake word detection...');
-        emit('stt://download-progress', { percent: 0, bytesDone: 0, bytesTotal: 0 });
-        await downloadFile(modelDownloadUrl('tiny'), tinyPath, (progress) => {
-          emit('stt://download-progress', progress);
+        console.error(
+          "[STT] Tiny model not found — downloading for wake word detection...",
+        );
+        emit("stt://download-progress", {
+          percent: 0,
+          bytesDone: 0,
+          bytesTotal: 0,
         });
-        console.error('[STT] Tiny model downloaded');
+        await downloadFile(modelDownloadUrl("tiny"), tinyPath, (progress) => {
+          emit("stt://download-progress", progress);
+        });
+        console.error("[STT] Tiny model downloaded");
       }
 
       // Determine command backend
-      const cloudProvider = (state.backend === 'groq' || state.backend === 'openai') ? state.backend as CloudProvider : null;
-      const cloudApiKey = cloudProvider === 'groq' ? state.groqApiKey : cloudProvider === 'openai' ? state.openaiApiKey : '';
+      const cloudProvider =
+        state.backend === "groq" || state.backend === "openai"
+          ? (state.backend as CloudProvider)
+          : null;
+      const cloudApiKey =
+        cloudProvider === "groq"
+          ? state.groqApiKey
+          : cloudProvider === "openai"
+            ? state.openaiApiKey
+            : "";
 
       if (!state.audioCapture) {
         const vad = new VadProcessor(16000, state.silenceTimeoutMs);
@@ -518,19 +592,28 @@ export function registerSpeechHandlers() {
         state.audioCapture = new AudioCapture((samples) => {
           const events = vad.process(samples);
           for (const event of events) {
-            handleVadEventWakeWord(event, whisperBin, tinyModel, cloudProvider, cloudApiKey);
+            handleVadEventWakeWord(
+              event,
+              whisperBin,
+              tinyModel,
+              cloudProvider,
+              cloudApiKey,
+            );
           }
         }, state.selectedDevice);
         wireAudioCaptureExit();
       }
 
-      state.wakeWordPhase = 'passive';
-    } else if (state.backend === 'openai' || state.backend === 'groq') {
+      state.wakeWordPhase = "passive";
+    } else if (state.backend === "openai" || state.backend === "groq") {
       // Cloud backend: just need API key
       const provider = state.backend as CloudProvider;
-      const apiKey = state.backend === 'groq' ? state.groqApiKey : state.openaiApiKey;
+      const apiKey =
+        state.backend === "groq" ? state.groqApiKey : state.openaiApiKey;
       if (!apiKey) {
-        throw new Error(`${state.backend === 'groq' ? 'Groq' : 'OpenAI'} API key not set. Configure it in Speech settings.`);
+        throw new Error(
+          `${state.backend === "groq" ? "Groq" : "OpenAI"} API key not set. Configure it in Speech settings.`,
+        );
       }
 
       if (!state.audioCapture) {
@@ -549,7 +632,7 @@ export function registerSpeechHandlers() {
       // Local backend: need whisper binary + model
       const p = modelPath(state.modelSize);
       if (!fs.existsSync(p)) {
-        throw new Error('Model not installed. Call stt_download_model first.');
+        throw new Error("Model not installed. Call stt_download_model first.");
       }
 
       if (!state.audioCapture) {
@@ -572,49 +655,51 @@ export function registerSpeechHandlers() {
     state.lastActivity = Date.now();
   });
 
-  ipcMain.handle('stt_stop', () => {
+  ipcMain.handle("stt_stop", () => {
     stopCapture();
   });
 
-  ipcMain.handle('stt_unload_model', () => {
+  ipcMain.handle("stt_unload_model", () => {
     stopCapture();
   });
 
-  ipcMain.handle('stt_status', () => ({
+  ipcMain.handle("stt_status", () => ({
     mode: state.mode,
     backend: state.backend,
-    modelLoaded: state.backend === 'openai'
-      ? !!state.openaiApiKey
-      : state.backend === 'groq'
-        ? !!state.groqApiKey
-        : (state.whisperBin !== null && fs.existsSync(modelPath(state.modelSize))),
+    modelLoaded:
+      state.backend === "openai"
+        ? !!state.openaiApiKey
+        : state.backend === "groq"
+          ? !!state.groqApiKey
+          : state.whisperBin !== null &&
+            fs.existsSync(modelPath(state.modelSize)),
     modelSize: state.modelSize,
     speaking: state.speaking,
-    wakeWordPhase: state.mode === 'wake-word' ? state.wakeWordPhase : null,
+    wakeWordPhase: state.mode === "wake-word" ? state.wakeWordPhase : null,
   }));
 
-  ipcMain.handle('stt_list_devices', () => {
+  ipcMain.handle("stt_list_devices", () => {
     return listInputDevices();
   });
 
-  ipcMain.handle('stt_set_device', (_e, args: { deviceName: string | null }) => {
-    console.error(`[STT] Setting device to: ${args.deviceName}`);
-    state.selectedDevice = args.deviceName || undefined;
+  ipcMain.handle(
+    "stt_set_device",
+    (_e, args: { deviceName: string | null }) => {
+      console.error(`[STT] Setting device to: ${args.deviceName}`);
+      state.selectedDevice = args.deviceName || undefined;
 
-    // If currently capturing, stop — caller should restart
-    if (state.audioCapture) {
-      console.error('[STT] Restarting audio capture with new device');
-      stopCapture();
-    }
-  });
+      // If currently capturing, stop — caller should restart
+      if (state.audioCapture) {
+        console.error("[STT] Restarting audio capture with new device");
+        stopCapture();
+      }
+    },
+  );
 
   // Inactivity watcher — emit model-unloaded after 5 min idle
   setInterval(() => {
-    if (
-      state.mode === 'off' &&
-      Date.now() - state.lastActivity > 300_000
-    ) {
-      emit('stt://model-unloaded');
+    if (state.mode === "off" && Date.now() - state.lastActivity > 300_000) {
+      emit("stt://model-unloaded");
     }
   }, 30_000);
 }
@@ -628,9 +713,11 @@ function wireAudioCaptureExit() {
   if (state.audioCapture) {
     state.audioCapture.onExit = (code) => {
       if (code !== 0 && state.speaking) {
-        console.error('[STT] Audio capture died while speaking — resetting speaking state');
+        console.error(
+          "[STT] Audio capture died while speaking — resetting speaking state",
+        );
         state.speaking = false;
-        emit('stt://vad-status', { speaking: false });
+        emit("stt://vad-status", { speaking: false });
       }
     };
   }
@@ -653,9 +740,9 @@ function stopCapture() {
     clearTimeout(state.activeTimeout);
     state.activeTimeout = null;
   }
-  state.mode = 'off';
+  state.mode = "off";
   state.speaking = false;
-  state.wakeWordPhase = 'passive';
+  state.wakeWordPhase = "passive";
 }
 
 // ---------------------------------------------------------------------------
@@ -665,35 +752,56 @@ function stopCapture() {
 interface SmartMatch {
   command: VoiceCommand;
   param: string;
-  method: 'gpt5' | 'regex';
+  method: "gpt5" | "regex";
 }
 
 /** Extract trailing number or number-word from text */
 function extractTrailingNumber(text: string): string {
   const numberWords: Record<string, string> = {
-    one: '1', two: '2', three: '3', four: '4', five: '5',
-    six: '6', seven: '7', eight: '8', nine: '9', ten: '10',
-    first: '1', second: '2', third: '3', fourth: '4', fifth: '5',
+    one: "1",
+    two: "2",
+    three: "3",
+    four: "4",
+    five: "5",
+    six: "6",
+    seven: "7",
+    eight: "8",
+    nine: "9",
+    ten: "10",
+    first: "1",
+    second: "2",
+    third: "3",
+    fourth: "4",
+    fifth: "5",
   };
-  const normalized = text.toLowerCase().replace(/[^\w\s]/g, '').trim();
+  const normalized = text
+    .toLowerCase()
+    .replace(/[^\w\s]/g, "")
+    .trim();
   const words = normalized.split(/\s+/);
   const last = words[words.length - 1];
   if (/^\d+$/.test(last)) return last;
   if (numberWords[last]) return numberWords[last];
-  return '';
+  return "";
 }
 
 /** Extract text after the command's trigger phrase */
 function extractParamFromText(text: string, cmd: VoiceCommand): string {
-  const normalized = text.toLowerCase().replace(/[^\w\s]/g, '').trim();
+  const normalized = text
+    .toLowerCase()
+    .replace(/[^\w\s]/g, "")
+    .trim();
   for (const trigger of cmd.triggerPhrases) {
-    const normTrigger = trigger.toLowerCase().replace(/[^\w\s]/g, '').trim();
+    const normTrigger = trigger
+      .toLowerCase()
+      .replace(/[^\w\s]/g, "")
+      .trim();
     if (normalized.startsWith(normTrigger)) {
       const remainder = normalized.slice(normTrigger.length).trim();
       if (remainder) return remainder;
     }
   }
-  return '';
+  return "";
 }
 
 async function matchCommandSmart(text: string): Promise<SmartMatch | null> {
@@ -705,10 +813,17 @@ async function matchCommandSmart(text: string): Promise<SmartMatch | null> {
       id: c.id,
       name: c.name,
       actionKind: c.action.kind,
-      actionTarget: 'target' in c.action ? (c.action as { target?: string }).target : undefined,
+      actionTarget:
+        "target" in c.action
+          ? (c.action as { target?: string }).target
+          : undefined,
     }));
 
-    const result = await classifyCommand(text, state.openaiApiKey, commandInfos);
+    const result = await classifyCommand(
+      text,
+      state.openaiApiKey,
+      commandInfos,
+    );
     if (result) {
       const cmd = commands.find((c) => c.id === result.commandId);
       if (cmd) {
@@ -717,7 +832,7 @@ async function matchCommandSmart(text: string): Promise<SmartMatch | null> {
         // GPT-5 mini is unreliable at param extraction — extract it ourselves
         if (!param) {
           // For navigate commands, try to extract from the raw text
-          if (cmd.action.kind === 'navigate') {
+          if (cmd.action.kind === "navigate") {
             // First try extracting text after a known trigger phrase
             param = extractParamFromText(text, cmd);
             // If that didn't work, at least grab a trailing number
@@ -727,13 +842,21 @@ async function matchCommandSmart(text: string): Promise<SmartMatch | null> {
 
         // Convert number words in param
         const numberWords: Record<string, string> = {
-          one: '1', two: '2', three: '3', four: '4', five: '5',
-          six: '6', seven: '7', eight: '8', nine: '9', ten: '10',
+          one: "1",
+          two: "2",
+          three: "3",
+          four: "4",
+          five: "5",
+          six: "6",
+          seven: "7",
+          eight: "8",
+          nine: "9",
+          ten: "10",
         };
         const paramLower = param.toLowerCase().trim();
         if (numberWords[paramLower]) param = numberWords[paramLower];
 
-        return { command: cmd, param, method: 'gpt5' };
+        return { command: cmd, param, method: "gpt5" };
       }
     }
   }
@@ -741,7 +864,11 @@ async function matchCommandSmart(text: string): Promise<SmartMatch | null> {
   // Regex fallback (when smart matching disabled or GPT-5 mini fails)
   const regexMatch = matchCommand(text);
   if (regexMatch) {
-    return { command: regexMatch.command, param: regexMatch.param, method: 'regex' };
+    return {
+      command: regexMatch.command,
+      param: regexMatch.param,
+      method: "regex",
+    };
   }
 
   return null;
@@ -751,40 +878,58 @@ async function matchCommandSmart(text: string): Promise<SmartMatch | null> {
 // VAD event handlers
 // ---------------------------------------------------------------------------
 
-function handleVadEvent(event: VadEvent, whisperBin: string, modelPath: string) {
+function handleVadEvent(
+  event: VadEvent,
+  whisperBin: string,
+  modelPath: string,
+) {
   switch (event.type) {
-    case 'utterance':
+    case "utterance":
       muteVad();
-      emit('stt://transcribing');
+      emit("stt://transcribing");
       transcribe(whisperBin, modelPath, event.samples)
         .then(async (text) => {
-          if (!text) { muteVad(); return; }
+          if (!text) {
+            muteVad();
+            return;
+          }
           // In global mode, route through command matching (always-on command mode)
-          if (state.mode === 'global' || state.mode === 'push-to-talk') {
+          if (state.mode === "global" || state.mode === "push-to-talk") {
             const matched = await matchCommandSmart(text);
             if (matched) {
               const cmd = matched.command;
               // Command matched (silent in production)
-              if (cmd.action.kind === 'stop-listening') {
+              if (cmd.action.kind === "stop-listening") {
                 muteVad();
-                emit('stt://voice-command', { commandId: cmd.id, action: cmd.action, param: matched.param, rawText: text });
+                emit("stt://voice-command", {
+                  commandId: cmd.id,
+                  action: cmd.action,
+                  param: matched.param,
+                  rawText: text,
+                });
                 stopCapture();
                 return;
               }
-              if (cmd.action.kind === 'shell') {
-                const { command: shellCmd, background } = cmd.action as import('./commands').ShellAction;
-                const { exec } = require('child_process');
+              if (cmd.action.kind === "shell") {
+                const { command: shellCmd, background } =
+                  cmd.action as import("./commands").ShellAction;
+                const { exec } = require("child_process");
                 if (background) exec(shellCmd, { shell: true });
               }
               muteVad();
-              emit('stt://voice-command', { commandId: cmd.id, action: cmd.action, param: matched.param, rawText: text });
+              emit("stt://voice-command", {
+                commandId: cmd.id,
+                action: cmd.action,
+                param: matched.param,
+                rawText: text,
+              });
             } else {
               muteVad();
-              emit('stt://transcription', { text, isFinal: true });
+              emit("stt://transcription", { text, isFinal: true });
             }
           } else {
             muteVad();
-            emit('stt://transcription', { text, isFinal: true });
+            emit("stt://transcription", { text, isFinal: true });
           }
         })
         .catch((err) => {
@@ -792,52 +937,70 @@ function handleVadEvent(event: VadEvent, whisperBin: string, modelPath: string) 
         });
       break;
 
-    case 'speaking-changed':
+    case "speaking-changed":
       state.speaking = event.speaking;
-      emit('stt://vad-status', { speaking: event.speaking });
+      emit("stt://vad-status", { speaking: event.speaking });
       break;
 
-    case 'calibrated':
+    case "calibrated":
       muteVad();
-      emit('stt://ready');
+      emit("stt://ready");
       break;
   }
 }
 
-function handleVadEventCloud(event: VadEvent, provider: CloudProvider, apiKey: string) {
+function handleVadEventCloud(
+  event: VadEvent,
+  provider: CloudProvider,
+  apiKey: string,
+) {
   switch (event.type) {
-    case 'utterance':
+    case "utterance":
       muteVad();
-      emit('stt://transcribing');
+      emit("stt://transcribing");
       transcribeCloud(provider, apiKey, event.samples)
         .then(async (text) => {
-          if (!text) { muteVad(); return; }
+          if (!text) {
+            muteVad();
+            return;
+          }
           // In global mode, route through command matching (always-on command mode)
-          if (state.mode === 'global' || state.mode === 'push-to-talk') {
+          if (state.mode === "global" || state.mode === "push-to-talk") {
             const matched = await matchCommandSmart(text);
             if (matched) {
               const cmd = matched.command;
               // Command matched (silent in production)
-              if (cmd.action.kind === 'stop-listening') {
+              if (cmd.action.kind === "stop-listening") {
                 muteVad();
-                emit('stt://voice-command', { commandId: cmd.id, action: cmd.action, param: matched.param, rawText: text });
+                emit("stt://voice-command", {
+                  commandId: cmd.id,
+                  action: cmd.action,
+                  param: matched.param,
+                  rawText: text,
+                });
                 stopCapture();
                 return;
               }
-              if (cmd.action.kind === 'shell') {
-                const { command: shellCmd, background } = cmd.action as import('./commands').ShellAction;
-                const { exec } = require('child_process');
+              if (cmd.action.kind === "shell") {
+                const { command: shellCmd, background } =
+                  cmd.action as import("./commands").ShellAction;
+                const { exec } = require("child_process");
                 if (background) exec(shellCmd, { shell: true });
               }
               muteVad();
-              emit('stt://voice-command', { commandId: cmd.id, action: cmd.action, param: matched.param, rawText: text });
+              emit("stt://voice-command", {
+                commandId: cmd.id,
+                action: cmd.action,
+                param: matched.param,
+                rawText: text,
+              });
             } else {
               muteVad();
-              emit('stt://transcription', { text, isFinal: true });
+              emit("stt://transcription", { text, isFinal: true });
             }
           } else {
             muteVad();
-            emit('stt://transcription', { text, isFinal: true });
+            emit("stt://transcription", { text, isFinal: true });
           }
         })
         .catch((err) => {
@@ -845,14 +1008,14 @@ function handleVadEventCloud(event: VadEvent, provider: CloudProvider, apiKey: s
         });
       break;
 
-    case 'speaking-changed':
+    case "speaking-changed":
       state.speaking = event.speaking;
-      emit('stt://vad-status', { speaking: event.speaking });
+      emit("stt://vad-status", { speaking: event.speaking });
       break;
 
-    case 'calibrated':
+    case "calibrated":
       muteVad();
-      emit('stt://ready');
+      emit("stt://ready");
       break;
   }
 }
@@ -865,8 +1028,8 @@ function handleVadEventWakeWord(
   cloudApiKey: string,
 ) {
   switch (event.type) {
-    case 'utterance': {
-      if (state.wakeWordPhase === 'passive') {
+    case "utterance": {
+      if (state.wakeWordPhase === "passive") {
         // Passive: transcribe with tiny model locally — silent, no UI events
         transcribe(whisperBin, tinyModelPath, event.samples)
           .then((text) => {
@@ -883,7 +1046,7 @@ function handleVadEventWakeWord(
       } else {
         // Active: transcribe the command with the best available backend
         muteVad();
-      emit('stt://transcribing');
+        emit("stt://transcribing");
 
         // Reset active timeout since user is speaking
         resetActiveTimeout();
@@ -893,12 +1056,18 @@ function handleVadEventWakeWord(
         const commandWords = getAllCommands()
           .filter((c) => c.enabled)
           .map((c) => c.triggerPhrases[0])
-          .join(', ');
+          .join(", ");
         const promptHint = `Voice commands: ${commandWords}`.slice(0, 890);
 
-        const transcribePromise = cloudProvider && cloudApiKey
-          ? transcribeCloud(cloudProvider, cloudApiKey, event.samples, promptHint)
-          : transcribe(whisperBin, tinyModelPath, event.samples);
+        const transcribePromise =
+          cloudProvider && cloudApiKey
+            ? transcribeCloud(
+                cloudProvider,
+                cloudApiKey,
+                event.samples,
+                promptHint,
+              )
+            : transcribe(whisperBin, tinyModelPath, event.samples);
 
         transcribePromise
           .then(async (text) => {
@@ -916,9 +1085,9 @@ function handleVadEventWakeWord(
               // Command matched (silent in production)
 
               // Dismiss-commands: return to passive wake word mode
-              if (cmd.action.kind === 'dismiss-commands') {
+              if (cmd.action.kind === "dismiss-commands") {
                 muteVad();
-                emit('stt://voice-command', {
+                emit("stt://voice-command", {
                   commandId: cmd.id,
                   action: cmd.action,
                   param: matched.param,
@@ -929,9 +1098,9 @@ function handleVadEventWakeWord(
               }
 
               // Stop-listening: stop mic entirely
-              if (cmd.action.kind === 'stop-listening') {
+              if (cmd.action.kind === "stop-listening") {
                 muteVad();
-                emit('stt://voice-command', {
+                emit("stt://voice-command", {
                   commandId: cmd.id,
                   action: cmd.action,
                   param: matched.param,
@@ -942,9 +1111,10 @@ function handleVadEventWakeWord(
               }
 
               // Shell commands execute in main process
-              if (cmd.action.kind === 'shell') {
-                const { command: shellCmd, background } = cmd.action as import('./commands').ShellAction;
-                const { exec } = require('child_process');
+              if (cmd.action.kind === "shell") {
+                const { command: shellCmd, background } =
+                  cmd.action as import("./commands").ShellAction;
+                const { exec } = require("child_process");
                 if (background) {
                   exec(shellCmd, { shell: true });
                 }
@@ -952,7 +1122,7 @@ function handleVadEventWakeWord(
 
               // Emit to renderer
               muteVad();
-              emit('stt://voice-command', {
+              emit("stt://voice-command", {
                 commandId: cmd.id,
                 action: cmd.action,
                 param: matched.param,
@@ -963,7 +1133,7 @@ function handleVadEventWakeWord(
             } else {
               // No command match — emit as regular transcription
               muteVad();
-              emit('stt://transcription', { text, isFinal: true });
+              emit("stt://transcription", { text, isFinal: true });
               resetActiveTimeout();
             }
           })
@@ -975,14 +1145,14 @@ function handleVadEventWakeWord(
       break;
     }
 
-    case 'speaking-changed':
+    case "speaking-changed":
       state.speaking = event.speaking;
-      emit('stt://vad-status', { speaking: event.speaking });
+      emit("stt://vad-status", { speaking: event.speaking });
       break;
 
-    case 'calibrated':
+    case "calibrated":
       muteVad();
-      emit('stt://ready');
+      emit("stt://ready");
       break;
   }
 }

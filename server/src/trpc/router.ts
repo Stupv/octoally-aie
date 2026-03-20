@@ -1,37 +1,42 @@
-import { z } from 'zod';
-import { router, publicProcedure } from './index.js';
-import { getDb } from '../db/index.js';
-import { getEvents } from '../services/event-store.js';
-import * as sessionManager from '../services/session-manager.js';
-import { nanoid } from 'nanoid';
+import { z } from "zod";
+import { router, publicProcedure } from "./index.js";
+import { getDb } from "../db/index.js";
+import { getEvents } from "../services/event-store.js";
+import * as sessionManager from "../services/session-manager.js";
+import { nanoid } from "nanoid";
 
 export const appRouter = router({
   // Projects
   projects: router({
     list: publicProcedure.query(() => {
       const db = getDb();
-      return db.prepare('SELECT * FROM projects ORDER BY name').all();
+      return db.prepare("SELECT * FROM projects ORDER BY name").all();
     }),
 
     create: publicProcedure
-      .input(z.object({
-        name: z.string().min(1),
-        path: z.string().min(1),
-        description: z.string().optional(),
-      }))
+      .input(
+        z.object({
+          name: z.string().min(1),
+          path: z.string().min(1),
+          description: z.string().optional(),
+        }),
+      )
       .mutation(({ input }) => {
         const db = getDb();
         const id = nanoid(12);
-        db.prepare('INSERT INTO projects (id, name, path, description) VALUES (?, ?, ?, ?)')
-          .run(id, input.name, input.path, input.description || null);
-        return db.prepare('SELECT * FROM projects WHERE id = ?').get(id);
+        db.prepare(
+          "INSERT INTO projects (id, name, path, description) VALUES (?, ?, ?, ?)",
+        ).run(id, input.name, input.path, input.description || null);
+        return db.prepare("SELECT * FROM projects WHERE id = ?").get(id);
       }),
 
     delete: publicProcedure
       .input(z.object({ id: z.string() }))
       .mutation(({ input }) => {
         const db = getDb();
-        const result = db.prepare('DELETE FROM projects WHERE id = ?').run(input.id);
+        const result = db
+          .prepare("DELETE FROM projects WHERE id = ?")
+          .run(input.id);
         return { deleted: result.changes > 0 };
       }),
   }),
@@ -51,14 +56,24 @@ export const appRouter = router({
       }),
 
     create: publicProcedure
-      .input(z.object({
-        projectPath: z.string(),
-        task: z.string().min(1),
-        projectId: z.string().optional(),
-      }))
+      .input(
+        z.object({
+          projectPath: z.string(),
+          task: z.string().min(1),
+          projectId: z.string().optional(),
+        }),
+      )
       .mutation(({ input }) => {
-        const session = sessionManager.createSession(input.projectPath, input.task, input.projectId);
-        sessionManager.spawnClaudeFlow(session.id, input.projectPath, input.task);
+        const session = sessionManager.createSession(
+          input.projectPath,
+          input.task,
+          input.projectId,
+        );
+        sessionManager.spawnClaudeFlow(
+          session.id,
+          input.projectPath,
+          input.task,
+        );
         return session;
       }),
 
@@ -72,12 +87,16 @@ export const appRouter = router({
   // Events
   events: router({
     list: publicProcedure
-      .input(z.object({
-        sessionId: z.string().optional(),
-        type: z.string().optional(),
-        limit: z.number().optional(),
-        since: z.string().optional(),
-      }).optional())
+      .input(
+        z
+          .object({
+            sessionId: z.string().optional(),
+            type: z.string().optional(),
+            limit: z.number().optional(),
+            since: z.string().optional(),
+          })
+          .optional(),
+      )
       .query(({ input }) => {
         return getEvents({
           session_id: input?.sessionId,
@@ -90,9 +109,9 @@ export const appRouter = router({
 
   // Health
   health: publicProcedure.query(() => ({
-    name: 'octoally',
-    version: '0.1.0',
-    status: 'running',
+    name: "octoally",
+    version: "0.1.0",
+    status: "running",
     uptime: process.uptime(),
   })),
 });

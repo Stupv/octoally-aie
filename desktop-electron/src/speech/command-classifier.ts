@@ -4,7 +4,7 @@
  * Much more robust than regex matching for short/garbled utterances.
  */
 
-import * as https from 'https';
+import * as https from "https";
 
 export interface ClassifiedCommand {
   commandId: string;
@@ -27,9 +27,7 @@ export function classifyCommand(
   apiKey: string,
   commands: CommandInfo[],
 ): Promise<ClassifiedCommand | null> {
-  const commandList = commands
-    .map((c) => `  "${c.id}": ${c.name}`)
-    .join('\n');
+  const commandList = commands.map((c) => `  "${c.id}": ${c.name}`).join("\n");
 
   const systemPrompt = `You are a voice command classifier for a terminal application.
 
@@ -91,14 +89,14 @@ If nothing matches: {"commandId": null, "param": ""}
 Be lenient with transcription errors. Return ONLY valid JSON.`;
 
   const body = JSON.stringify({
-    model: 'gpt-5-mini',
+    model: "gpt-5-mini",
     messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: text },
+      { role: "system", content: systemPrompt },
+      { role: "user", content: text },
     ],
     temperature: 0,
     max_tokens: 80,
-    response_format: { type: 'json_object' },
+    response_format: { type: "json_object" },
   });
 
   const start = Date.now();
@@ -106,24 +104,28 @@ Be lenient with transcription errors. Return ONLY valid JSON.`;
   return new Promise((resolve) => {
     const req = https.request(
       {
-        hostname: 'api.openai.com',
-        path: '/v1/chat/completions',
-        method: 'POST',
+        hostname: "api.openai.com",
+        path: "/v1/chat/completions",
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Length': Buffer.byteLength(body),
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Length": Buffer.byteLength(body),
         },
         timeout: 5000,
       },
       (res) => {
-        let data = '';
-        res.on('data', (chunk: Buffer) => { data += chunk.toString(); });
-        res.on('end', () => {
+        let data = "";
+        res.on("data", (chunk: Buffer) => {
+          data += chunk.toString();
+        });
+        res.on("end", () => {
           const elapsed = (Date.now() - start) / 1000;
 
           if (!res.statusCode || res.statusCode >= 400) {
-            console.error(`[STT] GPT-5 mini classifier error (${res.statusCode}): ${data}`);
+            console.error(
+              `[STT] GPT-5 mini classifier error (${res.statusCode}): ${data}`,
+            );
             resolve(null);
             return;
           }
@@ -132,33 +134,45 @@ Be lenient with transcription errors. Return ONLY valid JSON.`;
             const json = JSON.parse(data);
             const content = json.choices?.[0]?.message?.content;
             if (!content) {
-              console.error(`[STT] GPT-5 mini: empty response (${elapsed.toFixed(1)}s)`);
+              console.error(
+                `[STT] GPT-5 mini: empty response (${elapsed.toFixed(1)}s)`,
+              );
               resolve(null);
               return;
             }
 
             const result = JSON.parse(content);
             if (result.commandId) {
-              console.error(`[STT] GPT-5 mini classified "${text}" → ${result.commandId} (param: "${result.param || ''}") in ${elapsed.toFixed(1)}s`);
-              resolve({ commandId: result.commandId, param: result.param || '' });
+              console.error(
+                `[STT] GPT-5 mini classified "${text}" → ${result.commandId} (param: "${result.param || ""}") in ${elapsed.toFixed(1)}s`,
+              );
+              resolve({
+                commandId: result.commandId,
+                param: result.param || "",
+              });
             } else {
-              console.error(`[STT] GPT-5 mini: no command matched for "${text}" (${elapsed.toFixed(1)}s)`);
+              console.error(
+                `[STT] GPT-5 mini: no command matched for "${text}" (${elapsed.toFixed(1)}s)`,
+              );
               resolve(null);
             }
           } catch (e) {
-            console.error(`[STT] GPT-5 mini: failed to parse response (${elapsed.toFixed(1)}s):`, data);
+            console.error(
+              `[STT] GPT-5 mini: failed to parse response (${elapsed.toFixed(1)}s):`,
+              data,
+            );
             resolve(null);
           }
         });
       },
     );
 
-    req.on('error', (e) => {
+    req.on("error", (e) => {
       console.error(`[STT] GPT-5 mini request error: ${e.message}`);
       resolve(null);
     });
-    req.on('timeout', () => {
-      console.error('[STT] GPT-5 mini request timed out');
+    req.on("timeout", () => {
+      console.error("[STT] GPT-5 mini request timed out");
       req.destroy();
       resolve(null);
     });

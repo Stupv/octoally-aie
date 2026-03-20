@@ -83,19 +83,20 @@
 
 ### Supported Platforms
 
-| Platform | Status |
-|----------|--------|
-| **Linux** (Ubuntu/Debian) | Fully supported |
+| Platform                          | Status          |
+| --------------------------------- | --------------- |
+| **Linux** (Ubuntu/Debian)         | Fully supported |
 | **macOS** (Intel & Apple Silicon) | Fully supported |
 
 ### Prerequisites
 
-| Requirement | Why | Install |
-|-------------|-----|---------|
-| **Node.js 20+** | Runtime for the server | [nodejs.org](https://nodejs.org) |
-| **Claude Code** | AI coding agent | `npm install -g @anthropic-ai/claude-code` |
+| Requirement     | Why                    | Install                                    |
+| --------------- | ---------------------- | ------------------------------------------ |
+| **Node.js 20+** | Runtime for the server | [nodejs.org](https://nodejs.org)           |
+| **Claude Code** | AI coding agent        | `npm install -g @anthropic-ai/claude-code` |
 
 > **Important:** Before installing OctoAlly, you must run Claude Code at least once to accept terms and enable non-interactive mode:
+>
 > ```bash
 > claude                              # Accept terms & sign in
 > claude --dangerously-skip-permissions  # Enable non-interactive agent sessions
@@ -108,6 +109,7 @@ curl -fsSL https://raw.githubusercontent.com/ai-genius-automations/octoally/main
 ```
 
 The installer will:
+
 1. Check for Node.js and Claude Code (offer to install if missing)
 2. Verify Claude Code has been initialized
 3. Download and extract the pre-built release
@@ -189,12 +191,12 @@ octoally uninstall-service  # Remove the system service
 └──────────────────────┘
 ```
 
-| Layer | Stack |
-|-------|-------|
-| **Frontend** | React 19, Vite, Tailwind CSS 4, TanStack Query, Zustand, xterm.js |
-| **Backend** | Fastify, TypeScript, SQLite (better-sqlite3), node-pty, WebSocket |
-| **Desktop** | Electron, system tray, local Whisper STT, AES-256-GCM config encryption |
-| **Sessions** | tmux for persistence, dtach for detach/reattach, Claude Code + RuFlo |
+| Layer        | Stack                                                                   |
+| ------------ | ----------------------------------------------------------------------- |
+| **Frontend** | React 19, Vite, Tailwind CSS 4, TanStack Query, Zustand, xterm.js       |
+| **Backend**  | Fastify, TypeScript, SQLite (better-sqlite3), node-pty, WebSocket       |
+| **Desktop**  | Electron, system tray, local Whisper STT, AES-256-GCM config encryption |
+| **Sessions** | tmux for persistence, dtach for detach/reattach, Claude Code + RuFlo    |
 
 ---
 
@@ -228,20 +230,21 @@ Copy `.env.example` to `.env` in the project root:
 cp .env.example .env
 ```
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `42010` | Server port |
-| `OCTOALLY_TOKEN` | *(none)* | Auth token for API/WebSocket — leave empty for local use |
-| `DB_PATH` | `~/.octoally/octoally.db` | SQLite database path |
-| `LOG_LEVEL` | `info` | Log verbosity (`trace` / `debug` / `info` / `warn` / `error`) |
-| `OCTOALLY_USE_TMUX` | `true` | Use tmux for session management |
-| `OCTOALLY_USE_DTACH` | `true` | Use dtach for session persistence |
+| Variable             | Default                   | Description                                                   |
+| -------------------- | ------------------------- | ------------------------------------------------------------- |
+| `PORT`               | `42010`                   | Server port                                                   |
+| `OCTOALLY_TOKEN`     | _(none)_                  | Auth token for API/WebSocket — leave empty for local use      |
+| `DB_PATH`            | `~/.octoally/octoally.db` | SQLite database path                                          |
+| `LOG_LEVEL`          | `info`                    | Log verbosity (`trace` / `debug` / `info` / `warn` / `error`) |
+| `OCTOALLY_USE_TMUX`  | `true`                    | Use tmux for session management                               |
+| `OCTOALLY_USE_DTACH` | `true`                    | Use dtach for session persistence                             |
 
 ---
 
 ## Desktop App
 
 The Electron desktop app adds:
+
 - System tray with quick server access
 - Automatic server lifecycle management
 - Local speech-to-text via Whisper (no cloud needed)

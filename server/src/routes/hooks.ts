@@ -1,10 +1,10 @@
-import type { FastifyPluginAsync } from 'fastify';
-import { readFile, writeFile, mkdir } from 'fs/promises';
-import { join, dirname } from 'path';
-import { config } from '../config.js';
+import type { FastifyPluginAsync } from "fastify";
+import { readFile, writeFile, mkdir } from "fs/promises";
+import { join, dirname } from "path";
+import { config } from "../config.js";
 
-const OCTOALLY_HOOK_MARKER = '# octoally-events-hook';
-const LEGACY_HOOK_MARKER = '# hivecommand-events-hook';
+const OCTOALLY_HOOK_MARKER = "# octoally-events-hook";
+const LEGACY_HOOK_MARKER = "# hivecommand-events-hook";
 
 /**
  * Build the inline hook command that POSTs tool use events to OctoAlly.
@@ -37,32 +37,46 @@ interface ClaudeSettings {
 }
 
 function getSettingsPath(projectPath: string): string {
-  return join(projectPath, '.claude', 'settings.json');
+  return join(projectPath, ".claude", "settings.json");
 }
 
 async function readSettings(projectPath: string): Promise<ClaudeSettings> {
   try {
-    const content = await readFile(getSettingsPath(projectPath), 'utf-8');
+    const content = await readFile(getSettingsPath(projectPath), "utf-8");
     return JSON.parse(content);
   } catch {
     return {};
   }
 }
 
-async function saveSettings(projectPath: string, settings: ClaudeSettings): Promise<void> {
+async function saveSettings(
+  projectPath: string,
+  settings: ClaudeSettings,
+): Promise<void> {
   const settingsPath = getSettingsPath(projectPath);
   await mkdir(dirname(settingsPath), { recursive: true });
-  await writeFile(settingsPath, JSON.stringify(settings, null, 2) + '\n', 'utf-8');
+  await writeFile(
+    settingsPath,
+    JSON.stringify(settings, null, 2) + "\n",
+    "utf-8",
+  );
 }
 
 function isHookInstalled(settings: ClaudeSettings): boolean {
   const entries = settings.hooks?.PostToolUse || [];
   return entries.some((entry) =>
-    entry.hooks?.some((h) => h.command?.includes(OCTOALLY_HOOK_MARKER) || h.command?.includes(LEGACY_HOOK_MARKER))
+    entry.hooks?.some(
+      (h) =>
+        h.command?.includes(OCTOALLY_HOOK_MARKER) ||
+        h.command?.includes(LEGACY_HOOK_MARKER),
+    ),
   );
 }
 
-function installHook(settings: ClaudeSettings, projectPath: string): ClaudeSettings {
+function installHook(
+  settings: ClaudeSettings,
+  projectPath: string,
+): ClaudeSettings {
   if (!settings.hooks) settings.hooks = {};
   if (!settings.hooks.PostToolUse) settings.hooks.PostToolUse = [];
 
@@ -72,7 +86,7 @@ function installHook(settings: ClaudeSettings, projectPath: string): ClaudeSetti
   settings.hooks.PostToolUse.push({
     hooks: [
       {
-        type: 'command',
+        type: "command",
         command: buildHookCommand(projectPath),
         timeout: 5000,
       },
@@ -86,7 +100,12 @@ function uninstallHook(settings: ClaudeSettings): ClaudeSettings {
   if (!settings.hooks?.PostToolUse) return settings;
 
   settings.hooks.PostToolUse = settings.hooks.PostToolUse.filter(
-    (entry) => !entry.hooks?.some((h) => h.command?.includes(OCTOALLY_HOOK_MARKER) || h.command?.includes(LEGACY_HOOK_MARKER))
+    (entry) =>
+      !entry.hooks?.some(
+        (h) =>
+          h.command?.includes(OCTOALLY_HOOK_MARKER) ||
+          h.command?.includes(LEGACY_HOOK_MARKER),
+      ),
   );
 
   // Clean up empty arrays
@@ -104,9 +123,10 @@ export const hooksRoutes: FastifyPluginAsync = async (app) => {
   // Check if the OctoAlly events hook is installed for a project
   app.get<{
     Querystring: { path: string };
-  }>('/hooks/events-status', async (req, reply) => {
+  }>("/hooks/events-status", async (req, reply) => {
     const projectPath = req.query.path;
-    if (!projectPath) return reply.status(400).send({ error: 'path is required' });
+    if (!projectPath)
+      return reply.status(400).send({ error: "path is required" });
 
     const settings = await readSettings(projectPath);
     return { installed: isHookInstalled(settings) };
@@ -114,17 +134,20 @@ export const hooksRoutes: FastifyPluginAsync = async (app) => {
 
   // Install or uninstall the OctoAlly events hook
   app.post<{
-    Body: { path: string; action: 'install' | 'uninstall' };
-  }>('/hooks/events', async (req, reply) => {
+    Body: { path: string; action: "install" | "uninstall" };
+  }>("/hooks/events", async (req, reply) => {
     const { path: projectPath, action } = req.body || {};
-    if (!projectPath) return reply.status(400).send({ error: 'path is required' });
-    if (!action || !['install', 'uninstall'].includes(action)) {
-      return reply.status(400).send({ error: 'action must be install or uninstall' });
+    if (!projectPath)
+      return reply.status(400).send({ error: "path is required" });
+    if (!action || !["install", "uninstall"].includes(action)) {
+      return reply
+        .status(400)
+        .send({ error: "action must be install or uninstall" });
     }
 
     let settings = await readSettings(projectPath);
 
-    if (action === 'install') {
+    if (action === "install") {
       settings = installHook(settings, projectPath);
     } else {
       settings = uninstallHook(settings);

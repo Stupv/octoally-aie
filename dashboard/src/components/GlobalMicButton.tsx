@@ -1,8 +1,8 @@
-import { useState } from 'react';
-import { Mic, Settings, AudioLines, Loader2, Ear } from 'lucide-react';
-import { useSpeechStore, toggleMic, toggleWakeWord } from '../lib/speech';
-import { MicSettingsModal } from './MicSettingsModal';
-import { ModelSettingsModal } from './ModelSettingsModal';
+import { useState } from "react";
+import { Mic, Settings, AudioLines, Loader2, Ear } from "lucide-react";
+import { useSpeechStore, toggleMic, toggleWakeWord } from "../lib/speech";
+import { MicSettingsModal } from "./MicSettingsModal";
+import { ModelSettingsModal } from "./ModelSettingsModal";
 
 /**
  * Global mic toggle button group for the site header.
@@ -31,91 +31,107 @@ export function GlobalMicButton() {
 
   if (!available) return null;
 
-  const isWakeWord = micMode === 'wake-word';
-  const isActive = micMode === 'global';
+  const isWakeWord = micMode === "wake-word";
+  const isActive = micMode === "global";
   const isOn = isActive || isWakeWord;
   const isCalibrating = isOn && !micReady;
   const isListening = isActive && micReady && !speaking && !transcribing;
   const isSpeaking = isOn && micReady && speaking;
   const isTranscribing = isOn && micReady && !speaking && transcribing;
-  const isWakePassive = isWakeWord && micReady && wakeWordPhase === 'passive' && !speaking && !transcribing;
-  const isWakeActive = isWakeWord && micReady && wakeWordPhase === 'active' && !speaking && !transcribing;
+  const isWakePassive =
+    isWakeWord &&
+    micReady &&
+    wakeWordPhase === "passive" &&
+    !speaking &&
+    !transcribing;
+  const isWakeActive =
+    isWakeWord &&
+    micReady &&
+    wakeWordPhase === "active" &&
+    !speaking &&
+    !transcribing;
 
   // Per-button color states — mic and ear each get their own activity colors
-  const micBgColor = isCalibrating && isActive
-    ? '#d97706'
-    : isSpeaking && isActive
-      ? '#ea580c'
-      : isTranscribing && isActive
-        ? '#16a34a'
-        : isListening
-          ? '#16a34a'
-          : 'var(--bg-tertiary)';
+  const micBgColor =
+    isCalibrating && isActive
+      ? "#d97706"
+      : isSpeaking && isActive
+        ? "#ea580c"
+        : isTranscribing && isActive
+          ? "#16a34a"
+          : isListening
+            ? "#16a34a"
+            : "var(--bg-tertiary)";
 
-  const earBgColor = isCalibrating && isWakeWord
-    ? '#d97706'
-    : isSpeaking && isWakeWord
-      ? '#ea580c'
-      : isTranscribing && isWakeWord
-        ? '#16a34a'
-        : isWakeActive
-          ? '#16a34a'
-          : isWakePassive
-            ? '#7c3aed'
-            : 'var(--bg-tertiary)';
+  const earBgColor =
+    isCalibrating && isWakeWord
+      ? "#d97706"
+      : isSpeaking && isWakeWord
+        ? "#ea580c"
+        : isTranscribing && isWakeWord
+          ? "#16a34a"
+          : isWakeActive
+            ? "#16a34a"
+            : isWakePassive
+              ? "#7c3aed"
+              : "var(--bg-tertiary)";
 
-  const micTextColor = isActive ? 'white' : 'var(--text-secondary)';
-  const micBorderColor = isActive ? micBgColor : 'var(--border)';
-  const earTextColor = isWakeWord ? 'white' : 'var(--text-secondary)';
-  const earBorderColor = isWakeWord ? earBgColor : 'var(--border)';
+  const micTextColor = isActive ? "white" : "var(--text-secondary)";
+  const micBorderColor = isActive ? micBgColor : "var(--border)";
+  const earTextColor = isWakeWord ? "white" : "var(--text-secondary)";
+  const earBorderColor = isWakeWord ? earBgColor : "var(--border)";
 
   // Mic label (global always-on mode)
-  const micLabel = (isCalibrating && isActive)
-    ? 'Starting...'
-    : (isSpeaking && isActive)
-      ? 'Recording'
-      : (isTranscribing && isActive)
-        ? 'Processing'
-        : isListening
-          ? (dictationMode ? 'Dictating' : 'Command')
-          : '';
+  const micLabel =
+    isCalibrating && isActive
+      ? "Starting..."
+      : isSpeaking && isActive
+        ? "Recording"
+        : isTranscribing && isActive
+          ? "Processing"
+          : isListening
+            ? dictationMode
+              ? "Dictating"
+              : "Command"
+            : "";
 
   // Ear label (wake word mode)
-  const earLabel = (isCalibrating && isWakeWord)
-    ? 'Starting...'
-    : (isSpeaking && isWakeWord)
-      ? 'Recording'
-      : (isTranscribing && isWakeWord)
-        ? 'Processing'
-        : isWakeActive
-          ? 'Command?'
-          : isWakePassive
-            ? 'Wake Word'
-            : '';
+  const earLabel =
+    isCalibrating && isWakeWord
+      ? "Starting..."
+      : isSpeaking && isWakeWord
+        ? "Recording"
+        : isTranscribing && isWakeWord
+          ? "Processing"
+          : isWakeActive
+            ? "Command?"
+            : isWakePassive
+              ? "Wake Word"
+              : "";
 
   return (
     <>
       <div className="flex items-center">
         {/* Main mic toggle — always-on command mode (no wake word) */}
         <button
-          onClick={() => toggleMic('global')}
+          onClick={() => toggleMic("global")}
           title={
             isCalibrating && isActive
-              ? 'Calibrating microphone...'
+              ? "Calibrating microphone..."
               : isSpeaking && isActive
-                ? 'Recording speech...'
+                ? "Recording speech..."
                 : isTranscribing && isActive
-                  ? 'Transcribing...'
+                  ? "Transcribing..."
                   : isActive
-                    ? 'Disable always-on voice'
-                    : 'Enable always-on voice (no wake word)'
+                    ? "Disable always-on voice"
+                    : "Enable always-on voice (no wake word)"
           }
           className="flex items-center gap-1 px-2 py-1 rounded-l-md text-xs font-medium transition-colors"
           style={{
             background: micBgColor,
             color: micTextColor,
             border: `1px solid ${micBorderColor}`,
-            borderRight: 'none',
+            borderRight: "none",
           }}
         >
           <div className="relative flex items-center justify-center w-3.5 h-3.5">
@@ -127,7 +143,7 @@ export function GlobalMicButton() {
                 {isSpeaking && isActive && (
                   <span
                     className="absolute inset-0 rounded-full animate-ping"
-                    style={{ background: 'rgba(255,255,255,0.3)' }}
+                    style={{ background: "rgba(255,255,255,0.3)" }}
                   />
                 )}
               </>
@@ -141,8 +157,8 @@ export function GlobalMicButton() {
           onClick={() => toggleWakeWord()}
           title={
             isWakeWord
-              ? 'Disable wake word listening'
-              : 'Enable wake word listening'
+              ? "Disable wake word listening"
+              : "Enable wake word listening"
           }
           className="flex items-center gap-1 px-2 py-1 text-xs font-medium transition-colors"
           style={{
@@ -161,7 +177,7 @@ export function GlobalMicButton() {
                 {(isWakeActive || (isSpeaking && isWakeWord)) && (
                   <span
                     className="absolute inset-0 rounded-full animate-ping"
-                    style={{ background: 'rgba(255,255,255,0.3)' }}
+                    style={{ background: "rgba(255,255,255,0.3)" }}
                   />
                 )}
               </>
@@ -176,10 +192,10 @@ export function GlobalMicButton() {
           title="Select microphone"
           className="flex items-center px-2 py-1 text-xs transition-colors"
           style={{
-            background: 'var(--bg-tertiary)',
-            color: 'var(--text-secondary)',
-            borderTop: '1px solid var(--border)',
-            borderBottom: '1px solid var(--border)',
+            background: "var(--bg-tertiary)",
+            color: "var(--text-secondary)",
+            borderTop: "1px solid var(--border)",
+            borderBottom: "1px solid var(--border)",
           }}
         >
           <div className="flex items-center justify-center w-3.5 h-3.5">
@@ -193,10 +209,10 @@ export function GlobalMicButton() {
           title="Speech model settings"
           className="flex items-center px-2 py-1 rounded-r-md text-xs transition-colors"
           style={{
-            background: 'var(--bg-tertiary)',
-            color: 'var(--text-secondary)',
-            border: '1px solid var(--border)',
-            borderLeft: 'none',
+            background: "var(--bg-tertiary)",
+            color: "var(--text-secondary)",
+            border: "1px solid var(--border)",
+            borderLeft: "none",
           }}
         >
           <div className="flex items-center justify-center w-3.5 h-3.5">
@@ -208,9 +224,7 @@ export function GlobalMicButton() {
       {showDevices && (
         <MicSettingsModal onClose={() => setShowDevices(false)} />
       )}
-      {showModel && (
-        <ModelSettingsModal onClose={() => setShowModel(false)} />
-      )}
+      {showModel && <ModelSettingsModal onClose={() => setShowModel(false)} />}
     </>
   );
 }

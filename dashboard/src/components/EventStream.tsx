@@ -1,18 +1,19 @@
-import { useState, useEffect, useRef } from 'react';
-import { useStreamStore } from '../lib/websocket';
-import { api } from '../lib/api';
-import type { Event } from '../lib/api';
-import { Radio, Terminal, FileEdit, Zap, AlertCircle } from 'lucide-react';
+import { useState, useEffect, useRef } from "react";
+import { useStreamStore } from "../lib/websocket";
+import { api } from "../lib/api";
+import type { Event } from "../lib/api";
+import { Radio, Terminal, FileEdit, Zap, AlertCircle } from "lucide-react";
 
 function stripAnsiCodes(text: string): string {
   // eslint-disable-next-line no-control-regex
-  const ansiRegex = /\x1b\[[0-9;]*[a-zA-Z]|\x1b\].*?(?:\x07|\x1b\\)|\x1b[PX^_].*?\x1b\\|\x1b.|\r/g;
-  return text.replace(ansiRegex, '');
+  const ansiRegex =
+    /\x1b\[[0-9;]*[a-zA-Z]|\x1b\].*?(?:\x07|\x1b\\)|\x1b[PX^_].*?\x1b\\|\x1b.|\r/g;
+  return text.replace(ansiRegex, "");
 }
 
 function cleanTerminalOutput(text: string): string {
   let cleaned = stripAnsiCodes(text);
-  cleaned = cleaned.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n');
+  cleaned = cleaned.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n");
   return cleaned.trim();
 }
 
@@ -30,16 +31,16 @@ const typeIcons: Record<string, typeof Radio> = {
 };
 
 const typeColors: Record<string, string> = {
-  tool_use: '#a78bfa',
-  stdout: '#34d399',
-  stderr: '#f87171',
-  edit: '#60a5fa',
-  session_start: '#facc15',
-  session_end: '#94a3b8',
-  session_reconnect: '#f59e0b',
-  session_resume: '#22d3ee',
-  session_adopt: '#c084fc',
-  pty_output: '#34d399',
+  tool_use: "#a78bfa",
+  stdout: "#34d399",
+  stderr: "#f87171",
+  edit: "#60a5fa",
+  session_start: "#facc15",
+  session_end: "#94a3b8",
+  session_reconnect: "#f59e0b",
+  session_resume: "#22d3ee",
+  session_adopt: "#c084fc",
+  pty_output: "#34d399",
 };
 
 interface EventStreamProps {
@@ -70,7 +71,9 @@ export function EventStream({ sessionId, sessionIds }: EventStreamProps = {}) {
         if (!cancelled) {
           const map = new Map<number, Event>();
           for (const e of allEvents) map.set(e.id, e);
-          setHistoricalEvents(Array.from(map.values()).sort((a, b) => b.id - a.id));
+          setHistoricalEvents(
+            Array.from(map.values()).sort((a, b) => b.id - a.id),
+          );
         }
       } catch {
         // Non-critical
@@ -78,8 +81,10 @@ export function EventStream({ sessionId, sessionIds }: EventStreamProps = {}) {
     }
 
     fetchHistory();
-    return () => { cancelled = true; };
-  }, [filterIds?.join(',')]);
+    return () => {
+      cancelled = true;
+    };
+  }, [filterIds?.join(",")]);
 
   // Merge historical + live events, deduplicate by id
   const filteredLive = filterIds
@@ -93,29 +98,38 @@ export function EventStream({ sessionId, sessionIds }: EventStreamProps = {}) {
 
   // Auto-scroll on new events
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [events.length]);
 
   return (
     <div className="h-full flex flex-col">
       <div
         className="flex items-center justify-between px-4 py-2 border-b shrink-0"
-        style={{ borderColor: 'var(--border)', background: 'var(--bg-secondary)' }}
+        style={{
+          borderColor: "var(--border)",
+          background: "var(--bg-secondary)",
+        }}
       >
-        <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+        <h2
+          className="text-sm font-semibold"
+          style={{ color: "var(--text-primary)" }}
+        >
           Event Stream
         </h2>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5">
             <div
               className="w-2 h-2 rounded-full"
-              style={{ background: connected ? '#34d399' : '#f87171' }}
+              style={{ background: connected ? "#34d399" : "#f87171" }}
             />
-            <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-              {connected ? 'Live' : 'Offline'}
+            <span
+              className="text-xs"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              {connected ? "Live" : "Offline"}
             </span>
           </div>
-          <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+          <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
             {events.length} events
           </span>
         </div>
@@ -123,32 +137,39 @@ export function EventStream({ sessionId, sessionIds }: EventStreamProps = {}) {
 
       <div
         className="flex-1 overflow-y-auto"
-        style={{ background: 'var(--bg-primary)' }}
+        style={{ background: "var(--bg-primary)" }}
       >
         {events.length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <div className="text-center" style={{ color: 'var(--text-secondary)' }}>
+            <div
+              className="text-center"
+              style={{ color: "var(--text-secondary)" }}
+            >
               <Radio className="w-6 h-6 mx-auto mb-2 opacity-50" />
               <p className="text-sm">No events yet</p>
-              <p className="text-xs mt-1">Session lifecycle events will appear here</p>
+              <p className="text-xs mt-1">
+                Session lifecycle events will appear here
+              </p>
             </div>
           </div>
         ) : (
           <div>
             {events.map((event) => {
               const Icon = typeIcons[event.type] || Zap;
-              const color = typeColors[event.type] || '#a78bfa';
+              const color = typeColors[event.type] || "#a78bfa";
               let parsedData: Record<string, unknown> | null = null;
               try {
                 if (event.data) parsedData = JSON.parse(event.data);
-              } catch { /* ignore */ }
+              } catch {
+                /* ignore */
+              }
 
-              let summary = '';
+              let summary = "";
               if (parsedData) {
                 const fp = parsedData.file_path as string | undefined;
                 const cmd = parsedData.command as string | undefined;
                 const task = parsedData.task as string | undefined;
-                if (fp) summary = fp.split('/').slice(-2).join('/');
+                if (fp) summary = fp.split("/").slice(-2).join("/");
                 else if (cmd) summary = cleanTerminalOutput(cmd).slice(0, 80);
                 else if (task) summary = task;
               }
@@ -157,7 +178,7 @@ export function EventStream({ sessionId, sessionIds }: EventStreamProps = {}) {
                 <div
                   key={event.id}
                   className="flex items-start gap-3 px-4 py-2 border-b"
-                  style={{ borderColor: 'var(--border)' }}
+                  style={{ borderColor: "var(--border)" }}
                 >
                   <Icon className="w-4 h-4 mt-0.5 shrink-0" style={{ color }} />
                   <div className="min-w-0 flex-1">
@@ -169,16 +190,25 @@ export function EventStream({ sessionId, sessionIds }: EventStreamProps = {}) {
                         {event.type}
                       </span>
                       {event.tool_name && (
-                        <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
+                        <span
+                          className="text-xs font-medium"
+                          style={{ color: "var(--text-primary)" }}
+                        >
                           {event.tool_name}
                         </span>
                       )}
-                      <span className="text-[10px] ml-auto shrink-0" style={{ color: 'var(--text-secondary)' }}>
+                      <span
+                        className="text-[10px] ml-auto shrink-0"
+                        style={{ color: "var(--text-secondary)" }}
+                      >
                         {new Date(event.timestamp).toLocaleTimeString()}
                       </span>
                     </div>
                     {summary && (
-                      <p className="text-xs mt-0.5 truncate font-mono" style={{ color: 'var(--text-secondary)' }}>
+                      <p
+                        className="text-xs mt-0.5 truncate font-mono"
+                        style={{ color: "var(--text-secondary)" }}
+                      >
                         {summary}
                       </p>
                     )}

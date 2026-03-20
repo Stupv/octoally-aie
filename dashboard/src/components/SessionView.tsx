@@ -1,10 +1,18 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { Monitor, FolderTree, Code2, Radio, GitBranch, Plus, X } from 'lucide-react';
-import { Terminal } from './Terminal';
-import { FileExplorer } from './FileExplorer';
-import { EventStream } from './EventStream';
-import { GitPanel } from './GitPanel';
-import { api } from '../lib/api';
+import { useState, useEffect, useCallback, useRef } from "react";
+import {
+  Monitor,
+  FolderTree,
+  Code2,
+  Radio,
+  GitBranch,
+  Plus,
+  X,
+} from "lucide-react";
+import { Terminal } from "./Terminal";
+import { FileExplorer } from "./FileExplorer";
+import { EventStream } from "./EventStream";
+import { GitPanel } from "./GitPanel";
+import { api } from "../lib/api";
 
 interface SessionViewProps {
   sessionId: string;
@@ -23,7 +31,7 @@ interface TerminalInstance {
   label: string;
 }
 
-type ActiveMode = 'terminal' | 'explorer' | 'events' | 'git';
+type ActiveMode = "terminal" | "explorer" | "events" | "git";
 
 interface PersistedState {
   activeMode: ActiveMode;
@@ -44,7 +52,11 @@ function loadPersistedState(sessionId: string): PersistedState | null {
     const raw = localStorage.getItem(storageKey(sessionId));
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (parsed && parsed.activeMode && Array.isArray(parsed.explorerInstances)) {
+    if (
+      parsed &&
+      parsed.activeMode &&
+      Array.isArray(parsed.explorerInstances)
+    ) {
       return parsed;
     }
   } catch {}
@@ -75,13 +87,18 @@ export function cleanupSessionStorage(sessionId: string) {
 }
 
 const sidebarButtons = [
-  { id: 'terminal' as const, icon: Monitor, title: 'Terminal' },
-  { id: 'explorer' as const, icon: FolderTree, title: 'File Explorer' },
-  { id: 'events' as const, icon: Radio, title: 'Events' },
-  { id: 'git' as const, icon: GitBranch, title: 'Source Control' },
+  { id: "terminal" as const, icon: Monitor, title: "Terminal" },
+  { id: "explorer" as const, icon: FolderTree, title: "File Explorer" },
+  { id: "events" as const, icon: Radio, title: "Events" },
+  { id: "git" as const, icon: GitBranch, title: "Source Control" },
 ] as const;
 
-export function SessionView({ sessionId, projectPath, projectId: _projectId, onExit }: SessionViewProps) {
+export function SessionView({
+  sessionId,
+  projectPath,
+  projectId: _projectId,
+  onExit,
+}: SessionViewProps) {
   // Initialize from persisted state or defaults
   const [initialized] = useState(() => {
     const saved = loadPersistedState(sessionId);
@@ -89,61 +106,72 @@ export function SessionView({ sessionId, projectPath, projectId: _projectId, onE
       // Bump sequence counter past any persisted explorer IDs
       for (const e of saved.explorerInstances) {
         const match = e.id.match(/-explorer-(\d+)$/);
-        if (match) nextExplorerSeq = Math.max(nextExplorerSeq, parseInt(match[1]) + 1);
+        if (match)
+          nextExplorerSeq = Math.max(nextExplorerSeq, parseInt(match[1]) + 1);
       }
     }
     return saved;
   });
 
   const [activeMode, setActiveMode] = useState<ActiveMode>(
-    initialized?.activeMode ?? 'terminal'
+    initialized?.activeMode ?? "terminal",
   );
 
   // Terminal instances — first one is the parent session; restore extras
-  const [terminalInstances, setTerminalInstances] = useState<TerminalInstance[]>(() => {
+  const [terminalInstances, setTerminalInstances] = useState<
+    TerminalInstance[]
+  >(() => {
     if (initialized?.terminalInstances?.length) {
       // Deduplicate by id (stale localStorage may have accumulated dupes)
       const seen = new Set<string>();
-      const deduped = initialized.terminalInstances.filter(t => {
+      const deduped = initialized.terminalInstances.filter((t) => {
         if (seen.has(t.id)) return false;
         seen.add(t.id);
         return true;
       });
       const has = deduped.some((t) => t.id === sessionId);
       if (has) return deduped;
-      return [{ id: sessionId, label: 'Terminal 1' }, ...deduped.filter(t => t.id !== sessionId)];
+      return [
+        { id: sessionId, label: "Terminal 1" },
+        ...deduped.filter((t) => t.id !== sessionId),
+      ];
     }
-    return [{ id: sessionId, label: 'Terminal 1' }];
+    return [{ id: sessionId, label: "Terminal 1" }];
   });
 
   const [activeTerminalId, setActiveTerminalId] = useState(
-    initialized?.activeTerminalId ?? sessionId
+    initialized?.activeTerminalId ?? sessionId,
   );
 
   // Explorer instances — IDs scoped to session to avoid cross-session collisions
-  const [explorerInstances, setExplorerInstances] = useState<ExplorerInstance[]>(() => {
+  const [explorerInstances, setExplorerInstances] = useState<
+    ExplorerInstance[]
+  >(() => {
     if (initialized?.explorerInstances?.length) {
       return initialized.explorerInstances;
     }
     const id = `${sessionId}-explorer-${nextExplorerSeq++}`;
-    return [{ id, label: 'Explorer 1' }];
+    return [{ id, label: "Explorer 1" }];
   });
 
   const [activeExplorerId, setActiveExplorerId] = useState(
-    initialized?.activeExplorerId ?? explorerInstances[0].id
+    initialized?.activeExplorerId ?? explorerInstances[0].id,
   );
 
   const [creatingTerminal, setCreatingTerminal] = useState(false);
 
   // Auto-reconnect detached sessions (tmux survived a server restart)
   useEffect(() => {
-    api.sessions.get(sessionId).then(({ session }) => {
-      if (session.status === 'detached') {
-        api.sessions.reconnect(sessionId).catch((err) => {
-          console.error('Failed to auto-reconnect detached session:', err);
-        });
-      }
-    }).catch(() => {});
+    api.sessions
+      .get(sessionId)
+      .then(({ session }) => {
+        if (session.status === "detached") {
+          api.sessions.reconnect(sessionId).catch((err) => {
+            console.error("Failed to auto-reconnect detached session:", err);
+          });
+        }
+      })
+      .catch(() => {});
   }, [sessionId]);
 
   // Persist state whenever it changes
@@ -155,11 +183,18 @@ export function SessionView({ sessionId, projectPath, projectId: _projectId, onE
       terminalInstances,
       activeTerminalId,
     });
-  }, [sessionId, activeMode, explorerInstances, activeExplorerId, terminalInstances, activeTerminalId]);
+  }, [
+    sessionId,
+    activeMode,
+    explorerInstances,
+    activeExplorerId,
+    terminalInstances,
+    activeTerminalId,
+  ]);
 
   function handleOpenVSCode() {
     api.files.openVSCode(projectPath).catch((err) => {
-      console.error('Failed to open VS Code:', err);
+      console.error("Failed to open VS Code:", err);
     });
   }
 
@@ -169,14 +204,14 @@ export function SessionView({ sessionId, projectPath, projectId: _projectId, onE
     try {
       const result = await api.sessions.create({
         project_path: projectPath,
-        task: 'Interactive ruflo session',
+        task: "Interactive ruflo session",
       });
       const newId = result.session.id;
       const label = `Terminal ${terminalInstances.length + 1}`;
       setTerminalInstances((prev) => [...prev, { id: newId, label }]);
       setActiveTerminalId(newId);
     } catch (err) {
-      console.error('Failed to create terminal session:', err);
+      console.error("Failed to create terminal session:", err);
     } finally {
       setCreatingTerminal(false);
     }
@@ -185,17 +220,23 @@ export function SessionView({ sessionId, projectPath, projectId: _projectId, onE
   async function reconnectTerminal(oldId: string) {
     try {
       // First try to reconnect to an existing tmux session
-      const { session: oldSession } = await api.sessions.get(oldId).catch(() => ({ session: null }));
-      if (oldSession?.status === 'detached') {
+      const { session: oldSession } = await api.sessions
+        .get(oldId)
+        .catch(() => ({ session: null }));
+      if (oldSession?.status === "detached") {
         await api.sessions.reconnect(oldId);
         // Force re-mount of the Terminal component by cycling the ID
         setTerminalInstances((prev) =>
-          prev.map((t) => (t.id === oldId ? { ...t, id: oldId + '_reconnecting' } : t))
+          prev.map((t) =>
+            t.id === oldId ? { ...t, id: oldId + "_reconnecting" } : t,
+          ),
         );
         // Swap back after a tick so React unmounts/remounts the Terminal
         setTimeout(() => {
           setTerminalInstances((prev) =>
-            prev.map((t) => (t.id === oldId + '_reconnecting' ? { ...t, id: oldId } : t))
+            prev.map((t) =>
+              t.id === oldId + "_reconnecting" ? { ...t, id: oldId } : t,
+            ),
           );
           setActiveTerminalId(oldId);
         }, 50);
@@ -205,15 +246,15 @@ export function SessionView({ sessionId, projectPath, projectId: _projectId, onE
       // Otherwise create a new session
       const result = await api.sessions.create({
         project_path: projectPath,
-        task: 'Interactive ruflo session',
+        task: "Interactive ruflo session",
       });
       const newId = result.session.id;
       setTerminalInstances((prev) =>
-        prev.map((t) => (t.id === oldId ? { ...t, id: newId } : t))
+        prev.map((t) => (t.id === oldId ? { ...t, id: newId } : t)),
       );
       setActiveTerminalId(newId);
     } catch (err) {
-      console.error('Failed to reconnect terminal:', err);
+      console.error("Failed to reconnect terminal:", err);
     }
   }
 
@@ -237,7 +278,11 @@ export function SessionView({ sessionId, projectPath, projectId: _projectId, onE
     if (explorerInstances.length <= 1) return;
     setExplorerInstances((prev) => prev.filter((e) => e.id !== id));
     if (activeExplorerId === id) {
-      setActiveExplorerId(explorerInstances[0].id === id ? explorerInstances[1]?.id : explorerInstances[0].id);
+      setActiveExplorerId(
+        explorerInstances[0].id === id
+          ? explorerInstances[1]?.id
+          : explorerInstances[0].id,
+      );
     }
   }
 
@@ -245,7 +290,9 @@ export function SessionView({ sessionId, projectPath, projectId: _projectId, onE
   // When git diff view saves a file → tell explorer to refresh that file (if open and not dirty)
   // When explorer saves a file → tell git panel to re-fetch diff (if switching back)
   const [gitSavedFile, setGitSavedFile] = useState<string | null>(null);
-  const [explorerSavedFile, setExplorerSavedFile] = useState<string | null>(null);
+  const [explorerSavedFile, setExplorerSavedFile] = useState<string | null>(
+    null,
+  );
 
   const handleGitFileSaved = useCallback((filePath: string) => {
     // Git diff saved a file — tell explorer to refresh it
@@ -260,7 +307,11 @@ export function SessionView({ sessionId, projectPath, projectId: _projectId, onE
   // When switching to git view after explorer saved, trigger refresh
   const prevMode = useRef(activeMode);
   useEffect(() => {
-    if (activeMode === 'git' && prevMode.current !== 'git' && explorerSavedFile) {
+    if (
+      activeMode === "git" &&
+      prevMode.current !== "git" &&
+      explorerSavedFile
+    ) {
       // Git panel's isVisible prop change will trigger its own refresh via useEffect
       // Clear the flag
       setExplorerSavedFile(null);
@@ -269,9 +320,11 @@ export function SessionView({ sessionId, projectPath, projectId: _projectId, onE
   }, [activeMode, explorerSavedFile]);
 
   // Sub-tab bar: only show for terminal and explorer modes (events has no instances)
-  const showSubTabs = activeMode === 'terminal' || activeMode === 'explorer';
-  const instances = activeMode === 'terminal' ? terminalInstances : explorerInstances;
-  const activeInstanceId = activeMode === 'terminal' ? activeTerminalId : activeExplorerId;
+  const showSubTabs = activeMode === "terminal" || activeMode === "explorer";
+  const instances =
+    activeMode === "terminal" ? terminalInstances : explorerInstances;
+  const activeInstanceId =
+    activeMode === "terminal" ? activeTerminalId : activeExplorerId;
 
   return (
     <div className="h-full flex">
@@ -280,8 +333,8 @@ export function SessionView({ sessionId, projectPath, projectId: _projectId, onE
         className="flex flex-col items-center py-2 gap-1 shrink-0"
         style={{
           width: 48,
-          background: 'var(--bg-secondary)',
-          borderRight: '1px solid var(--border)',
+          background: "var(--bg-secondary)",
+          borderRight: "1px solid var(--border)",
         }}
       >
         {sidebarButtons.map(({ id, icon: Icon, title }) => {
@@ -295,8 +348,8 @@ export function SessionView({ sessionId, projectPath, projectId: _projectId, onE
               style={{
                 width: 36,
                 height: 36,
-                background: isActive ? 'var(--bg-tertiary)' : 'transparent',
-                color: isActive ? 'var(--accent)' : 'var(--text-secondary)',
+                background: isActive ? "var(--bg-tertiary)" : "transparent",
+                color: isActive ? "var(--accent)" : "var(--text-secondary)",
               }}
             >
               <Icon className="w-5 h-5" />
@@ -312,8 +365,8 @@ export function SessionView({ sessionId, projectPath, projectId: _projectId, onE
           style={{
             width: 36,
             height: 36,
-            background: 'transparent',
-            color: 'var(--text-secondary)',
+            background: "transparent",
+            color: "var(--text-secondary)",
           }}
         >
           <Code2 className="w-5 h-5" />
@@ -327,38 +380,48 @@ export function SessionView({ sessionId, projectPath, projectId: _projectId, onE
           <div
             className="flex items-center gap-0.5 px-2 py-1 shrink-0 overflow-x-auto"
             style={{
-              borderBottom: '1px solid var(--border)',
-              background: 'var(--bg-secondary)',
+              borderBottom: "1px solid var(--border)",
+              background: "var(--bg-secondary)",
             }}
           >
             {instances.map((inst) => {
               const isActive = inst.id === activeInstanceId;
-              const canClose = activeMode === 'terminal'
-                ? inst.id !== sessionId
-                : explorerInstances.length > 1;
+              const canClose =
+                activeMode === "terminal"
+                  ? inst.id !== sessionId
+                  : explorerInstances.length > 1;
 
               return (
                 <div
                   key={inst.id}
                   className="flex items-center gap-0.5 rounded-md shrink-0 group"
                   style={{
-                    background: isActive ? 'var(--bg-tertiary)' : 'transparent',
+                    background: isActive ? "var(--bg-tertiary)" : "transparent",
                   }}
                 >
                   <button
                     onClick={() => {
-                      if (activeMode === 'terminal') setActiveTerminalId(inst.id);
+                      if (activeMode === "terminal")
+                        setActiveTerminalId(inst.id);
                       else setActiveExplorerId(inst.id);
                     }}
                     className="flex items-center gap-1.5 pl-3 pr-1 py-1 text-xs font-medium transition-colors"
                     style={{
-                      color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
+                      color: isActive
+                        ? "var(--text-primary)"
+                        : "var(--text-secondary)",
                     }}
                   >
-                    {activeMode === 'terminal' ? (
-                      <Monitor className="w-3 h-3 shrink-0" style={{ color: 'var(--success)' }} />
+                    {activeMode === "terminal" ? (
+                      <Monitor
+                        className="w-3 h-3 shrink-0"
+                        style={{ color: "var(--success)" }}
+                      />
                     ) : (
-                      <FolderTree className="w-3 h-3 shrink-0" style={{ color: 'var(--accent)' }} />
+                      <FolderTree
+                        className="w-3 h-3 shrink-0"
+                        style={{ color: "var(--accent)" }}
+                      />
                     )}
                     <span className="truncate">{inst.label}</span>
                   </button>
@@ -366,11 +429,11 @@ export function SessionView({ sessionId, projectPath, projectId: _projectId, onE
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (activeMode === 'terminal') closeTerminal(inst.id);
+                        if (activeMode === "terminal") closeTerminal(inst.id);
                         else closeExplorer(inst.id);
                       }}
                       className="p-0.5 rounded opacity-0 group-hover:opacity-60 hover:opacity-100 transition-opacity mr-1"
-                      style={{ color: 'var(--text-secondary)' }}
+                      style={{ color: "var(--text-secondary)" }}
                       title="Close"
                     >
                       <X className="w-3 h-3" />
@@ -382,15 +445,18 @@ export function SessionView({ sessionId, projectPath, projectId: _projectId, onE
 
             {/* Add instance button */}
             <button
-              onClick={activeMode === 'terminal' ? addTerminal : addExplorer}
-              disabled={activeMode === 'terminal' && creatingTerminal}
+              onClick={activeMode === "terminal" ? addTerminal : addExplorer}
+              disabled={activeMode === "terminal" && creatingTerminal}
               className="flex items-center justify-center rounded-md shrink-0 transition-colors"
-              title={activeMode === 'terminal' ? 'New Terminal' : 'New Explorer'}
+              title={
+                activeMode === "terminal" ? "New Terminal" : "New Explorer"
+              }
               style={{
                 width: 28,
                 height: 28,
-                color: 'var(--text-secondary)',
-                opacity: creatingTerminal && activeMode === 'terminal' ? 0.4 : 1,
+                color: "var(--text-secondary)",
+                opacity:
+                  creatingTerminal && activeMode === "terminal" ? 0.4 : 1,
               }}
             >
               <Plus className="w-3.5 h-3.5" />
@@ -406,14 +472,21 @@ export function SessionView({ sessionId, projectPath, projectId: _projectId, onE
               key={term.id}
               className="h-full absolute inset-0"
               style={{
-                display: activeMode === 'terminal' && activeTerminalId === term.id ? 'block' : 'none',
+                display:
+                  activeMode === "terminal" && activeTerminalId === term.id
+                    ? "block"
+                    : "none",
               }}
             >
               <Terminal
                 sessionId={term.id}
-                visible={activeMode === 'terminal' && activeTerminalId === term.id}
+                visible={
+                  activeMode === "terminal" && activeTerminalId === term.id
+                }
                 hideCursor
-                onExit={term.id === sessionId && onExit ? () => onExit() : undefined}
+                onExit={
+                  term.id === sessionId && onExit ? () => onExit() : undefined
+                }
                 onReconnect={() => reconnectTerminal(term.id)}
               />
             </div>
@@ -425,17 +498,25 @@ export function SessionView({ sessionId, projectPath, projectId: _projectId, onE
               key={expl.id}
               className="h-full absolute inset-0"
               style={{
-                display: activeMode === 'explorer' && activeExplorerId === expl.id ? 'block' : 'none',
+                display:
+                  activeMode === "explorer" && activeExplorerId === expl.id
+                    ? "block"
+                    : "none",
               }}
             >
-              <FileExplorer rootPath={projectPath} instanceId={expl.id} refreshFilePath={gitSavedFile} onFileSaved={handleExplorerFileSaved} />
+              <FileExplorer
+                rootPath={projectPath}
+                instanceId={expl.id}
+                refreshFilePath={gitSavedFile}
+                onFileSaved={handleExplorerFileSaved}
+              />
             </div>
           ))}
 
           {/* Events panel — filtered to this session's events */}
           <div
             className="h-full absolute inset-0"
-            style={{ display: activeMode === 'events' ? 'block' : 'none' }}
+            style={{ display: activeMode === "events" ? "block" : "none" }}
           >
             <EventStream sessionId={sessionId} />
           </div>
@@ -443,9 +524,13 @@ export function SessionView({ sessionId, projectPath, projectId: _projectId, onE
           {/* Git panel */}
           <div
             className="h-full absolute inset-0"
-            style={{ display: activeMode === 'git' ? 'block' : 'none' }}
+            style={{ display: activeMode === "git" ? "block" : "none" }}
           >
-            <GitPanel projectPath={projectPath} isVisible={activeMode === 'git'} onFileSaved={handleGitFileSaved} />
+            <GitPanel
+              projectPath={projectPath}
+              isVisible={activeMode === "git"}
+              onFileSaved={handleGitFileSaved}
+            />
           </div>
         </div>
       </div>

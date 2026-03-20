@@ -16,18 +16,23 @@ function getAudioContext(): AudioContext {
     audioCtx = new AudioContext();
   }
   // Resume if suspended (browser autoplay policy)
-  if (audioCtx.state === 'suspended') {
+  if (audioCtx.state === "suspended") {
     audioCtx.resume();
   }
   return audioCtx;
 }
 
-function playTone(frequency: number, duration: number, startTime: number, volume = 0.15) {
+function playTone(
+  frequency: number,
+  duration: number,
+  startTime: number,
+  volume = 0.15,
+) {
   const ctx = getAudioContext();
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
 
-  osc.type = 'sine';
+  osc.type = "sine";
   osc.frequency.value = frequency;
 
   // Soft envelope to avoid clicks
@@ -47,7 +52,7 @@ export function cueReady() {
   if (!audioCuesEnabled) return;
   const ctx = getAudioContext();
   const now = ctx.currentTime;
-  playTone(880, 0.12, now);       // A5
+  playTone(880, 0.12, now); // A5
   playTone(1175, 0.15, now + 0.13); // D6
 }
 
@@ -70,7 +75,7 @@ export function cueWakeActivate() {
   if (!audioCuesEnabled) return;
   const ctx = getAudioContext();
   const now = ctx.currentTime;
-  playTone(587, 0.1, now);        // D5
+  playTone(587, 0.1, now); // D5
   playTone(880, 0.15, now + 0.11); // A5
 }
 
@@ -78,13 +83,13 @@ export function cueWakeActivate() {
 // Enable/disable setting (persisted in localStorage)
 // ---------------------------------------------------------------------------
 
-const STORAGE_KEY = 'octoally-audio-cues';
+const STORAGE_KEY = "octoally-audio-cues";
 let audioCuesEnabled = loadSetting();
 
 function loadSetting(): boolean {
   try {
     const val = localStorage.getItem(STORAGE_KEY);
-    return val === null ? true : val === 'true'; // enabled by default
+    return val === null ? true : val === "true"; // enabled by default
   } catch {
     return true;
   }
@@ -98,5 +103,7 @@ export function setAudioCuesEnabled(enabled: boolean) {
   audioCuesEnabled = enabled;
   try {
     localStorage.setItem(STORAGE_KEY, String(enabled));
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
