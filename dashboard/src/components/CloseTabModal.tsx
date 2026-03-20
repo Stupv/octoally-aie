@@ -1,11 +1,11 @@
-import { useEffect, useRef } from 'react';
-import { AlertTriangle, EyeOff, Trash2 } from 'lucide-react';
+import { useEffect, useRef } from "react";
+import { AlertTriangle, EyeOff, Trash2 } from "lucide-react";
 
 interface CloseTabModalProps {
   /** e.g. "Hivemind 1", "Terminal 2" */
   label: string;
   /** e.g. "hivemind", "terminal", "project" */
-  type: 'hivemind' | 'terminal' | 'agent' | 'project';
+  type: "hivemind" | "terminal" | "agent" | "project";
   /** Number of running sessions (only for project type) */
   sessionCount?: number;
   /** Called when user picks "Hide Tab" */
@@ -29,32 +29,32 @@ export function CloseTabModal({
   useEffect(() => {
     cancelRef.current?.focus();
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCancel();
+      if (e.key === "Escape") onCancel();
     };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
   }, [onCancel]);
 
-  const isProject = type === 'project';
-  const typeLabel = type === 'hivemind' ? 'hive-mind' : type;
+  const isProject = type === "project";
+  const typeLabel = type === "hivemind" ? "hive-mind" : type;
 
   const message = isProject
-    ? `This project has ${sessionCount} running session${sessionCount !== 1 ? 's' : ''}. You can hide the tab (sessions keep running in the background) or close and terminate all sessions.`
+    ? `This project has ${sessionCount} running session${sessionCount !== 1 ? "s" : ""}. You can hide the tab (sessions keep running in the background) or close and terminate all sessions.`
     : `"${label}" is still running. You can hide the tab (the ${typeLabel} keeps running in the background) or close and kill the process.`;
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ background: 'rgba(0,0,0,0.6)' }}
+      style={{ background: "rgba(0,0,0,0.6)" }}
       onClick={onCancel}
     >
       <div
         className="flex flex-col rounded-lg shadow-2xl overflow-hidden"
         style={{
-          width: '100%',
-          maxWidth: '420px',
-          background: 'var(--bg-primary)',
-          border: '1px solid var(--border)',
+          width: "100%",
+          maxWidth: "420px",
+          background: "var(--bg-primary)",
+          border: "1px solid var(--border)",
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -62,18 +62,24 @@ export function CloseTabModal({
         <div className="flex items-center gap-3 px-5 pt-5 pb-2">
           <div
             className="flex items-center justify-center w-9 h-9 rounded-full shrink-0"
-            style={{ background: '#f59e0b20' }}
+            style={{ background: "#f59e0b20" }}
           >
-            <AlertTriangle className="w-5 h-5" style={{ color: '#f59e0b' }} />
+            <AlertTriangle className="w-5 h-5" style={{ color: "#f59e0b" }} />
           </div>
-          <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-            Close {isProject ? 'Project Tab' : `${label}`}
+          <h3
+            className="text-sm font-semibold"
+            style={{ color: "var(--text-primary)" }}
+          >
+            Close {isProject ? "Project Tab" : `${label}`}
           </h3>
         </div>
 
         {/* Body */}
         <div className="px-5 py-3">
-          <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+          <p
+            className="text-xs leading-relaxed"
+            style={{ color: "var(--text-secondary)" }}
+          >
             {message}
           </p>
         </div>
@@ -81,16 +87,19 @@ export function CloseTabModal({
         {/* Actions */}
         <div
           className="flex items-center justify-end gap-2 px-5 py-3"
-          style={{ borderTop: '1px solid var(--border)', background: 'var(--bg-secondary)' }}
+          style={{
+            borderTop: "1px solid var(--border)",
+            background: "var(--bg-secondary)",
+          }}
         >
           <button
             ref={cancelRef}
             onClick={onCancel}
             className="px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
             style={{
-              background: 'var(--bg-tertiary)',
-              color: 'var(--text-secondary)',
-              border: '1px solid var(--border)',
+              background: "var(--bg-tertiary)",
+              color: "var(--text-secondary)",
+              border: "1px solid var(--border)",
             }}
           >
             Cancel
@@ -99,9 +108,9 @@ export function CloseTabModal({
             onClick={onHide}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
             style={{
-              background: 'var(--bg-tertiary)',
-              color: 'var(--text-primary)',
-              border: '1px solid var(--border)',
+              background: "var(--bg-tertiary)",
+              color: "var(--text-primary)",
+              border: "1px solid var(--border)",
             }}
           >
             <EyeOff className="w-3 h-3" />
@@ -111,13 +120,13 @@ export function CloseTabModal({
             onClick={onKill}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
             style={{
-              background: '#ef4444',
-              color: '#fff',
-              border: 'none',
+              background: "#ef4444",
+              color: "#fff",
+              border: "none",
             }}
           >
             <Trash2 className="w-3 h-3" />
-            {isProject ? 'Close & Terminate' : 'Close & Kill'}
+            {isProject ? "Close & Terminate" : "Close & Kill"}
           </button>
         </div>
       </div>

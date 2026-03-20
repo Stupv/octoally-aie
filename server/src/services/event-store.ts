@@ -1,4 +1,4 @@
-import { getDb } from '../db/index.js';
+import { getDb } from "../db/index.js";
 
 export interface Event {
   id: number;
@@ -48,10 +48,12 @@ export function insertEvent(input: EventInput): Event {
     input.project_id || null,
     input.type,
     input.tool_name || null,
-    input.data ? JSON.stringify(input.data) : null
+    input.data ? JSON.stringify(input.data) : null,
   );
 
-  const event = db.prepare('SELECT * FROM events WHERE id = ?').get(result.lastInsertRowid) as Event;
+  const event = db
+    .prepare("SELECT * FROM events WHERE id = ?")
+    .get(result.lastInsertRowid) as Event;
   notifyListeners(event);
   return event;
 }
@@ -68,24 +70,26 @@ export function getEvents(options?: {
   const params: unknown[] = [];
 
   if (options?.session_id) {
-    conditions.push('session_id = ?');
+    conditions.push("session_id = ?");
     params.push(options.session_id);
   }
   if (options?.project_id) {
-    conditions.push('project_id = ?');
+    conditions.push("project_id = ?");
     params.push(options.project_id);
   }
   if (options?.type) {
-    conditions.push('type = ?');
+    conditions.push("type = ?");
     params.push(options.type);
   }
   if (options?.since) {
-    conditions.push('timestamp > ?');
+    conditions.push("timestamp > ?");
     params.push(options.since);
   }
 
-  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   const limit = options?.limit || 100;
 
-  return db.prepare(`SELECT * FROM events ${where} ORDER BY id DESC LIMIT ?`).all(...params, limit) as Event[];
+  return db
+    .prepare(`SELECT * FROM events ${where} ORDER BY id DESC LIMIT ?`)
+    .all(...params, limit) as Event[];
 }

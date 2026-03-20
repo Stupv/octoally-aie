@@ -1,6 +1,6 @@
-import type { FastifyPluginAsync } from 'fastify';
-import { insertEvent, getEvents } from '../services/event-store.js';
-import { getDb } from '../db/index.js';
+import type { FastifyPluginAsync } from "fastify";
+import { insertEvent, getEvents } from "../services/event-store.js";
+import { getDb } from "../db/index.js";
 
 /**
  * Check if a session_id exists in the sessions table.
@@ -10,7 +10,7 @@ import { getDb } from '../db/index.js';
 function resolveSessionId(sessionId?: string): string | undefined {
   if (!sessionId) return undefined;
   const db = getDb();
-  const row = db.prepare('SELECT id FROM sessions WHERE id = ?').get(sessionId);
+  const row = db.prepare("SELECT id FROM sessions WHERE id = ?").get(sessionId);
   return row ? sessionId : undefined;
 }
 
@@ -20,7 +20,9 @@ function resolveSessionId(sessionId?: string): string | undefined {
 function resolveProjectId(projectPath?: string): string | undefined {
   if (!projectPath) return undefined;
   const db = getDb();
-  const row = db.prepare('SELECT id FROM projects WHERE path = ?').get(projectPath) as { id: string } | undefined;
+  const row = db
+    .prepare("SELECT id FROM projects WHERE path = ?")
+    .get(projectPath) as { id: string } | undefined;
   return row?.id;
 }
 
@@ -38,21 +40,28 @@ export const eventRoutes: FastifyPluginAsync = async (app) => {
       tool_name?: string;
       data?: Record<string, unknown>;
     };
-  }>('/events', async (req, reply) => {
+  }>("/events", async (req, reply) => {
     const { type, session_id, project_path, tool_name, data } = req.body;
 
     if (!type) {
-      return reply.status(400).send({ error: 'type is required' });
+      return reply.status(400).send({ error: "type is required" });
     }
 
     // Store the original session_id in data for reference, use resolved one for FK
     const resolvedId = resolveSessionId(session_id);
     const projectId = resolveProjectId(project_path);
-    const eventData = session_id && !resolvedId
-      ? { ...data, claude_session_id: session_id }
-      : data;
+    const eventData =
+      session_id && !resolvedId
+        ? { ...data, claude_session_id: session_id }
+        : data;
 
-    const event = insertEvent({ type, session_id: resolvedId, project_id: projectId, tool_name, data: eventData });
+    const event = insertEvent({
+      type,
+      session_id: resolvedId,
+      project_id: projectId,
+      tool_name,
+      data: eventData,
+    });
     return { ok: true, event_id: event.id };
   });
 
@@ -66,8 +75,9 @@ export const eventRoutes: FastifyPluginAsync = async (app) => {
       limit?: string;
       since?: string;
     };
-  }>('/events', async (req) => {
-    const { session_id, project_id, project_path, type, limit, since } = req.query;
+  }>("/events", async (req) => {
+    const { session_id, project_id, project_path, type, limit, since } =
+      req.query;
 
     // Allow querying by project_path (resolves to project_id)
     const resolvedProjectId = project_id || resolveProjectId(project_path);

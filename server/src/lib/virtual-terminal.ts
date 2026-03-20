@@ -1,4 +1,4 @@
-import xtermHeadless from '@xterm/headless';
+import xtermHeadless from "@xterm/headless";
 const { Terminal } = xtermHeadless;
 
 /**
@@ -23,12 +23,12 @@ const { Terminal } = xtermHeadless;
  */
 const STRIP_RE = new RegExp(
   [
-    '\\x1b\\[\\?(1049|1047|47)[hl]',    // Alt buffer switches
-    '\\x1b\\[\\d*(?:;\\d*)*[Hf]',        // Cursor position / home (CSI n;m H/f)
-    '\\x1b\\[\\d*A',                      // Cursor up (CSI n A)
-    '\\x1b\\[\\d*J',                      // Erase in display / clear screen (CSI n J)
-  ].join('|'),
-  'g'
+    "\\x1b\\[\\?(1049|1047|47)[hl]", // Alt buffer switches
+    "\\x1b\\[\\d*(?:;\\d*)*[Hf]", // Cursor position / home (CSI n;m H/f)
+    "\\x1b\\[\\d*A", // Cursor up (CSI n A)
+    "\\x1b\\[\\d*J", // Erase in display / clear screen (CSI n J)
+  ].join("|"),
+  "g",
 );
 
 export class VirtualTerminal {
@@ -47,13 +47,14 @@ export class VirtualTerminal {
   /** Feed raw PTY data into the virtual terminal */
   write(data: string): void {
     // Strip sequences that cause backward movement / overwrites
-    const cleaned = data.replace(STRIP_RE, '');
+    const cleaned = data.replace(STRIP_RE, "");
     if (!cleaned) return;
 
     this._writeQueue = this._writeQueue.then(
-      () => new Promise<void>((resolve) => {
-        this.term.write(cleaned, resolve);
-      })
+      () =>
+        new Promise<void>((resolve) => {
+          this.term.write(cleaned, resolve);
+        }),
     );
   }
 
@@ -73,10 +74,10 @@ export class VirtualTerminal {
       const line = buffer.getLine(i + buffer.baseY);
       if (line) lines.push(line.translateToString(true));
     }
-    while (lines.length > 0 && lines[lines.length - 1].trim() === '') {
+    while (lines.length > 0 && lines[lines.length - 1].trim() === "") {
       lines.pop();
     }
-    return lines.join('\n');
+    return lines.join("\n");
   }
 
   /** Resize the virtual terminal */

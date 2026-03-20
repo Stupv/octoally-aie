@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Bot, X, Copy, Check, Play } from 'lucide-react';
+import { useState } from "react";
+import { Bot, X, Copy, Check, Play } from "lucide-react";
 
 export function AgentGuideButton() {
   const [open, setOpen] = useState(false);
@@ -9,7 +9,7 @@ export function AgentGuideButton() {
       <button
         onClick={() => setOpen(true)}
         className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs transition-colors hover:bg-white/10"
-        style={{ color: 'var(--text-secondary)' }}
+        style={{ color: "var(--text-secondary)" }}
         title="Agent Integration Guide"
       >
         <Bot className="w-4 h-4" />
@@ -29,14 +29,26 @@ interface AgentGuideModalProps {
   additionalInstructions?: string;
 }
 
-export function AgentGuideModal({ onClose, projectName, projectPath, task, additionalInstructions }: AgentGuideModalProps) {
+export function AgentGuideModal({
+  onClose,
+  projectName,
+  projectPath,
+  task,
+  additionalInstructions,
+}: AgentGuideModalProps) {
   const baseUrl = `${window.location.protocol}//${window.location.hostname}:42010`;
   const [copiedAll, setCopiedAll] = useState(false);
   const hasContext = !!(projectName && projectPath);
 
   const copyFullGuide = () => {
     const text = hasContext
-      ? generateContextualGuide(baseUrl, projectName!, projectPath!, task, additionalInstructions)
+      ? generateContextualGuide(
+          baseUrl,
+          projectName!,
+          projectPath!,
+          task,
+          additionalInstructions,
+        )
       : generatePlainTextGuide(baseUrl);
     navigator.clipboard.writeText(text);
     setCopiedAll(true);
@@ -46,22 +58,32 @@ export function AgentGuideModal({ onClose, projectName, projectPath, task, addit
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.6)' }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      style={{ background: "rgba(0,0,0,0.6)" }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div
         className="relative rounded-xl border shadow-2xl w-full max-w-5xl max-h-[85vh] flex flex-col"
-        style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
+        style={{
+          background: "var(--bg-secondary)",
+          borderColor: "var(--border)",
+        }}
       >
         {/* Header */}
         <div
           className="flex items-center justify-between px-6 py-4 border-b shrink-0"
-          style={{ borderColor: 'var(--border)' }}
+          style={{ borderColor: "var(--border)" }}
         >
           <div className="flex items-center gap-2">
-            <Bot className="w-5 h-5" style={{ color: 'var(--accent)' }} />
-            <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
-              {hasContext ? `Run ${projectName} with OpenClaw` : 'Agent Integration Guide'}
+            <Bot className="w-5 h-5" style={{ color: "var(--accent)" }} />
+            <h2
+              className="text-lg font-semibold"
+              style={{ color: "var(--text-primary)" }}
+            >
+              {hasContext
+                ? `Run ${projectName} with OpenClaw`
+                : "Agent Integration Guide"}
             </h2>
           </div>
           <div className="flex items-center gap-2">
@@ -69,15 +91,23 @@ export function AgentGuideModal({ onClose, projectName, projectPath, task, addit
               onClick={copyFullGuide}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
               style={{
-                background: copiedAll ? 'var(--success)' : 'var(--bg-tertiary)',
-                color: copiedAll ? 'white' : 'var(--text-secondary)',
+                background: copiedAll ? "var(--success)" : "var(--bg-tertiary)",
+                color: copiedAll ? "white" : "var(--text-secondary)",
               }}
               title="Copy entire guide as plain text (for pasting into agent prompts)"
             >
-              {copiedAll ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-              {copiedAll ? 'Copied!' : 'Copy All'}
+              {copiedAll ? (
+                <Check className="w-3.5 h-3.5" />
+              ) : (
+                <Copy className="w-3.5 h-3.5" />
+              )}
+              {copiedAll ? "Copied!" : "Copy All"}
             </button>
-            <button onClick={onClose} className="p-1 rounded hover:bg-white/10" style={{ color: 'var(--text-secondary)' }}>
+            <button
+              onClick={onClose}
+              className="p-1 rounded hover:bg-white/10"
+              style={{ color: "var(--text-secondary)" }}
+            >
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -89,25 +119,72 @@ export function AgentGuideModal({ onClose, projectName, projectPath, task, addit
           {hasContext && (
             <div
               className="rounded-lg border p-4 space-y-2"
-              style={{ background: 'var(--bg-primary)', borderColor: 'var(--accent)', borderWidth: '1px' }}
+              style={{
+                background: "var(--bg-primary)",
+                borderColor: "var(--accent)",
+                borderWidth: "1px",
+              }}
             >
-              <div className="flex items-center gap-2 text-sm font-medium" style={{ color: 'var(--accent)' }}>
+              <div
+                className="flex items-center gap-2 text-sm font-medium"
+                style={{ color: "var(--accent)" }}
+              >
                 <Play className="w-4 h-4" />
                 Ready to Run
               </div>
-              <div className="text-sm space-y-1" style={{ color: 'var(--text-secondary)' }}>
-                <div><span className="font-medium" style={{ color: 'var(--text-primary)' }}>Project:</span> {projectName}</div>
-                <div><span className="font-medium" style={{ color: 'var(--text-primary)' }}>Path:</span> <code className="text-xs font-mono">{projectPath}</code></div>
-                {task && <div><span className="font-medium" style={{ color: 'var(--text-primary)' }}>Task:</span> {task}</div>}
+              <div
+                className="text-sm space-y-1"
+                style={{ color: "var(--text-secondary)" }}
+              >
+                <div>
+                  <span
+                    className="font-medium"
+                    style={{ color: "var(--text-primary)" }}
+                  >
+                    Project:
+                  </span>{" "}
+                  {projectName}
+                </div>
+                <div>
+                  <span
+                    className="font-medium"
+                    style={{ color: "var(--text-primary)" }}
+                  >
+                    Path:
+                  </span>{" "}
+                  <code className="text-xs font-mono">{projectPath}</code>
+                </div>
+                {task && (
+                  <div>
+                    <span
+                      className="font-medium"
+                      style={{ color: "var(--text-primary)" }}
+                    >
+                      Task:
+                    </span>{" "}
+                    {task}
+                  </div>
+                )}
                 {additionalInstructions && (
                   <div>
-                    <span className="font-medium" style={{ color: 'var(--text-primary)' }}>Additional Instructions:</span>
-                    <pre className="text-xs mt-1 whitespace-pre-wrap" style={{ color: 'var(--text-secondary)' }}>{additionalInstructions}</pre>
+                    <span
+                      className="font-medium"
+                      style={{ color: "var(--text-primary)" }}
+                    >
+                      Additional Instructions:
+                    </span>
+                    <pre
+                      className="text-xs mt-1 whitespace-pre-wrap"
+                      style={{ color: "var(--text-secondary)" }}
+                    >
+                      {additionalInstructions}
+                    </pre>
                   </div>
                 )}
               </div>
-              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                Click "Copy All" to copy the full command with project details, then paste it to OpenClaw.
+              <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                Click "Copy All" to copy the full command with project details,
+                then paste it to OpenClaw.
               </p>
             </div>
           )}
@@ -115,21 +192,27 @@ export function AgentGuideModal({ onClose, projectName, projectPath, task, addit
           {/* Intro */}
           <Section title="Overview">
             <p>
-              External bot agents (like OpenClaw) can fully control OctoAlly sessions via the REST API.
-              Create sessions, send commands, read output, and respond to prompts — all programmatically.
+              External bot agents (like OpenClaw) can fully control OctoAlly
+              sessions via the REST API. Create sessions, send commands, read
+              output, and respond to prompts — all programmatically.
             </p>
           </Section>
 
           {/* Capabilities endpoint */}
           <Section title="Self-Describing API">
             <p>
-              The capabilities endpoint returns the full API spec, state machine, prompt types, and operational guidance.
-              Point your agent here first:
+              The capabilities endpoint returns the full API spec, state
+              machine, prompt types, and operational guidance. Point your agent
+              here first:
             </p>
             <CodeBlock text={`GET ${baseUrl}/api/agent/capabilities`} />
-            <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
-              This is the single source of truth for agent integration. It includes all endpoints, request/response schemas,
-              error codes, and tips.
+            <p
+              className="text-xs mt-1"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              This is the single source of truth for agent integration. It
+              includes all endpoints, request/response schemas, error codes, and
+              tips.
             </p>
           </Section>
 
@@ -142,18 +225,22 @@ export function AgentGuideModal({ onClose, projectName, projectPath, task, addit
               </li>
               <li>
                 <strong>Create a session</strong> with a project path and task:
-                <CodeBlock text={`POST ${baseUrl}/api/sessions
+                <CodeBlock
+                  text={`POST ${baseUrl}/api/sessions
 Content-Type: application/json
 
 {
   "project_path": "/path/to/project",
   "task": "Fix the login bug",
   "project_id": "optional-project-id"
-}`} />
+}`}
+                />
               </li>
               <li>
-                <strong>Poll for output + state</strong> with a single call (no side effects):
-                <CodeBlock text={`GET ${baseUrl}/api/sessions/:id/display?lines=100
+                <strong>Poll for output + state</strong> with a single call (no
+                side effects):
+                <CodeBlock
+                  text={`GET ${baseUrl}/api/sessions/:id/display?lines=100
 
 # Returns rendered terminal text + inline state:
 {
@@ -164,22 +251,30 @@ Content-Type: application/json
   "output": "...last 100 lines of clean terminal text...",
   "cursor": 1234,
   "truncated": false
-}`} />
+}`}
+                />
               </li>
               <li>
-                <strong>Poll incrementally</strong> — pass the <code>cursor</code> from previous response to only get new content:
-                <CodeBlock text={`GET ${baseUrl}/api/sessions/:id/display?lines=100&since=1234`} />
+                <strong>Poll incrementally</strong> — pass the{" "}
+                <code>cursor</code> from previous response to only get new
+                content:
+                <CodeBlock
+                  text={`GET ${baseUrl}/api/sessions/:id/display?lines=100&since=1234`}
+                />
               </li>
               <li>
-                <strong>Send input</strong> when the session needs it (<code>waiting_for_input</code> or <code>idle</code>):
-                <CodeBlock text={`POST ${baseUrl}/api/sessions/:id/execute
+                <strong>Send input</strong> when the session needs it (
+                <code>waiting_for_input</code> or <code>idle</code>):
+                <CodeBlock
+                  text={`POST ${baseUrl}/api/sessions/:id/execute
 Content-Type: application/json
 
 {
   "input": "your response or command",
   "timeout": 60000,
   "quiescenceMs": 5000
-}`} />
+}`}
+                />
               </li>
               <li>
                 <strong>Repeat steps 3-5</strong> until the task is complete.
@@ -190,65 +285,155 @@ Content-Type: application/json
           {/* Key rules */}
           <Section title="Critical Rules">
             <ul className="space-y-1.5">
-              <Rule>ALWAYS read <code>/api/agent/capabilities</code> first before doing anything else.</Rule>
-              <Rule>Use <code>GET /sessions/:id/display</code> for read-only monitoring — output + state in one call with cursor-based incremental polling.</Rule>
-              <Rule>Use <code>POST /sessions/:id/execute</code> to send input and get the response.</Rule>
-              <Rule>NEVER send empty strings, whitespace, or newlines as input — they produce no output. Always send meaningful text.</Rule>
-              <Rule>NEVER read PTY output directly, scrape temp files, or parse raw terminal data.</Rule>
-              <Rule>Check <code>processState</code> before sending input — if <code>busy</code>, wait.</Rule>
-              <Rule>When <code>promptType</code> is <code>choice</code>, use the <code>choices</code> array to pick the right option number.</Rule>
-              <Rule>Use <code>timeout: 60000</code> and <code>quiescenceMs: 5000</code> for hive-mind sessions (they are slower than raw Claude Code).</Rule>
+              <Rule>
+                ALWAYS read <code>/api/agent/capabilities</code> first before
+                doing anything else.
+              </Rule>
+              <Rule>
+                Use <code>GET /sessions/:id/display</code> for read-only
+                monitoring — output + state in one call with cursor-based
+                incremental polling.
+              </Rule>
+              <Rule>
+                Use <code>POST /sessions/:id/execute</code> to send input and
+                get the response.
+              </Rule>
+              <Rule>
+                NEVER send empty strings, whitespace, or newlines as input —
+                they produce no output. Always send meaningful text.
+              </Rule>
+              <Rule>
+                NEVER read PTY output directly, scrape temp files, or parse raw
+                terminal data.
+              </Rule>
+              <Rule>
+                Check <code>processState</code> before sending input — if{" "}
+                <code>busy</code>, wait.
+              </Rule>
+              <Rule>
+                When <code>promptType</code> is <code>choice</code>, use the{" "}
+                <code>choices</code> array to pick the right option number.
+              </Rule>
+              <Rule>
+                Use <code>timeout: 60000</code> and{" "}
+                <code>quiescenceMs: 5000</code> for hive-mind sessions (they are
+                slower than raw Claude Code).
+              </Rule>
             </ul>
           </Section>
 
           {/* Reading output */}
           <Section title="Reading Output (Display vs Execute)">
             <p>
-              <strong><code>GET /sessions/:id/display</code></strong> — Read-only. Returns the last N lines of rendered terminal text
-              plus inline state (processState, promptType, choices) in a single call. Use the <code>cursor</code> value
-              for incremental polling — pass it back as <code>?since=cursor</code> to only get new content.
-              This is the <strong>recommended way to monitor</strong> what a session is doing.
+              <strong>
+                <code>GET /sessions/:id/display</code>
+              </strong>{" "}
+              — Read-only. Returns the last N lines of rendered terminal text
+              plus inline state (processState, promptType, choices) in a single
+              call. Use the <code>cursor</code> value for incremental polling —
+              pass it back as <code>?since=cursor</code> to only get new
+              content. This is the <strong>recommended way to monitor</strong>{" "}
+              what a session is doing.
             </p>
             <p className="mt-2">
-              <strong><code>POST /sessions/:id/execute</code></strong> — Send input and get output. Only returns
-              <strong> new output generated after your input</strong>. Use this when you need to interact, not just observe.
-              Send meaningful text (e.g. <code>"Ready"</code>), never empty strings.
+              <strong>
+                <code>POST /sessions/:id/execute</code>
+              </strong>{" "}
+              — Send input and get output. Only returns
+              <strong> new output generated after your input</strong>. Use this
+              when you need to interact, not just observe. Send meaningful text
+              (e.g. <code>"Ready"</code>), never empty strings.
             </p>
           </Section>
 
           {/* WebSocket */}
           <Section title="Real-Time WebSocket (Optional)">
-            <p>
-              For lower latency, connect via WebSocket instead of polling:
-            </p>
-            <CodeBlock text={`WS ${baseUrl.replace('http', 'ws')}/api/sessions/:id/agent`} />
-            <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-              Supports <code>execute</code> and <code>get_state</code> messages. Pushes <code>state_change</code> and <code>output</code> events in real-time.
+            <p>For lower latency, connect via WebSocket instead of polling:</p>
+            <CodeBlock
+              text={`WS ${baseUrl.replace("http", "ws")}/api/sessions/:id/agent`}
+            />
+            <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+              Supports <code>execute</code> and <code>get_state</code> messages.
+              Pushes <code>state_change</code> and <code>output</code> events in
+              real-time.
             </p>
           </Section>
 
           {/* All endpoints summary */}
           <Section title="All Endpoints">
             <div className="space-y-1 font-mono text-xs">
-              <EndpointRow method="GET" path="/api/projects" desc="List all projects" />
-              <EndpointRow method="POST" path="/api/projects" desc="Add a project" />
-              <EndpointRow method="DELETE" path="/api/projects/:id" desc="Remove a project" />
-              <EndpointRow method="GET" path="/api/sessions" desc="List all sessions" />
-              <EndpointRow method="POST" path="/api/sessions" desc="Create a new session" />
-              <EndpointRow method="DELETE" path="/api/sessions/:id" desc="Kill a session" />
-              <EndpointRow method="GET" path="/api/sessions/:id/state" desc="Get session state" />
-              <EndpointRow method="GET" path="/api/sessions/:id/display" desc="Rendered output + state (polling)" />
-              <EndpointRow method="POST" path="/api/sessions/:id/execute" desc="Send input, get output" />
-              <EndpointRow method="POST" path="/api/sessions/:id/cancel" desc="Cancel stuck execute" />
-              <EndpointRow method="GET" path="/api/agent/capabilities" desc="Full API spec (self-describing)" />
-              <EndpointRow method="GET" path="/api/context" desc="Concise session summary (low tokens)" />
-              <EndpointRow method="WS" path="/api/sessions/:id/agent" desc="Real-time agent WebSocket" />
+              <EndpointRow
+                method="GET"
+                path="/api/projects"
+                desc="List all projects"
+              />
+              <EndpointRow
+                method="POST"
+                path="/api/projects"
+                desc="Add a project"
+              />
+              <EndpointRow
+                method="DELETE"
+                path="/api/projects/:id"
+                desc="Remove a project"
+              />
+              <EndpointRow
+                method="GET"
+                path="/api/sessions"
+                desc="List all sessions"
+              />
+              <EndpointRow
+                method="POST"
+                path="/api/sessions"
+                desc="Create a new session"
+              />
+              <EndpointRow
+                method="DELETE"
+                path="/api/sessions/:id"
+                desc="Kill a session"
+              />
+              <EndpointRow
+                method="GET"
+                path="/api/sessions/:id/state"
+                desc="Get session state"
+              />
+              <EndpointRow
+                method="GET"
+                path="/api/sessions/:id/display"
+                desc="Rendered output + state (polling)"
+              />
+              <EndpointRow
+                method="POST"
+                path="/api/sessions/:id/execute"
+                desc="Send input, get output"
+              />
+              <EndpointRow
+                method="POST"
+                path="/api/sessions/:id/cancel"
+                desc="Cancel stuck execute"
+              />
+              <EndpointRow
+                method="GET"
+                path="/api/agent/capabilities"
+                desc="Full API spec (self-describing)"
+              />
+              <EndpointRow
+                method="GET"
+                path="/api/context"
+                desc="Concise session summary (low tokens)"
+              />
+              <EndpointRow
+                method="WS"
+                path="/api/sessions/:id/agent"
+                desc="Real-time agent WebSocket"
+              />
             </div>
           </Section>
 
           {/* Example bot loop */}
           <Section title="Example Agent Loop">
-            <CodeBlock text={`// Minimal agent control loop
+            <CodeBlock
+              text={`// Minimal agent control loop
 const BASE = "${baseUrl}/api";
 
 // 1. Read capabilities first (important!)
@@ -301,7 +486,8 @@ while (true) {
   await new Promise(r => setTimeout(r, 2000));
   display = await pollDisplay(session.id);
   if (display.output) console.log(display.output);
-}`} />
+}`}
+            />
           </Section>
         </div>
       </div>
@@ -309,11 +495,25 @@ while (true) {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <div>
-      <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>{title}</h3>
-      <div className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+      <h3
+        className="text-sm font-semibold mb-2"
+        style={{ color: "var(--text-primary)" }}
+      >
+        {title}
+      </h3>
+      <div
+        className="text-sm leading-relaxed"
+        style={{ color: "var(--text-secondary)" }}
+      >
         {children}
       </div>
     </div>
@@ -333,17 +533,27 @@ function CodeBlock({ text }: { text: string }) {
     <div className="relative group mt-2 mb-2">
       <pre
         className="text-xs font-mono p-3 rounded-lg overflow-x-auto"
-        style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+        style={{
+          background: "var(--bg-primary)",
+          color: "var(--text-primary)",
+        }}
       >
         {text}
       </pre>
       <button
         onClick={handleCopy}
         className="absolute top-2 right-2 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-        style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}
+        style={{
+          background: "var(--bg-tertiary)",
+          color: "var(--text-secondary)",
+        }}
         title="Copy"
       >
-        {copied ? <Check className="w-3 h-3" style={{ color: 'var(--success)' }} /> : <Copy className="w-3 h-3" />}
+        {copied ? (
+          <Check className="w-3 h-3" style={{ color: "var(--success)" }} />
+        ) : (
+          <Copy className="w-3 h-3" />
+        )}
       </button>
     </div>
   );
@@ -351,8 +561,11 @@ function CodeBlock({ text }: { text: string }) {
 
 function Rule({ children }: { children: React.ReactNode }) {
   return (
-    <li className="text-sm flex gap-2" style={{ color: 'var(--text-secondary)' }}>
-      <span style={{ color: 'var(--accent)' }}>*</span>
+    <li
+      className="text-sm flex gap-2"
+      style={{ color: "var(--text-secondary)" }}
+    >
+      <span style={{ color: "var(--accent)" }}>*</span>
       <span>{children}</span>
     </li>
   );
@@ -417,7 +630,7 @@ POST /sessions/:id/execute — Send input and get output. Only returns NEW outpu
 
 ## Real-Time WebSocket (Optional)
 For lower latency, connect via WebSocket instead of polling:
-WS ${baseUrl.replace('http', 'ws')}/api/sessions/:id/agent
+WS ${baseUrl.replace("http", "ws")}/api/sessions/:id/agent
 Supports "execute" and "get_state" messages. Pushes "state_change" and "output" events in real-time.
 
 ## All Endpoints
@@ -487,8 +700,16 @@ while (true) {
 `;
 }
 
-function generateContextualGuide(baseUrl: string, projectName: string, projectPath: string, task?: string, additionalInstructions?: string): string {
-  const effectiveTask = task?.trim() || 'Start up and ask me what I want you to do and NOTHING ELSE';
+function generateContextualGuide(
+  baseUrl: string,
+  projectName: string,
+  projectPath: string,
+  task?: string,
+  additionalInstructions?: string,
+): string {
+  const effectiveTask =
+    task?.trim() ||
+    "Start up and ask me what I want you to do and NOTHING ELSE";
   // Build the full task string for the API call: task + additional instructions separated
   const fullTaskForApi = additionalInstructions
     ? `${effectiveTask}\n\n---\nAdditional Instructions:\n${additionalInstructions}`
@@ -496,7 +717,7 @@ function generateContextualGuide(baseUrl: string, projectName: string, projectPa
 
   const instructionsSection = additionalInstructions
     ? `\n## Additional Instructions\n${additionalInstructions}\n`
-    : '';
+    : "";
 
   return `# OctoAlly Agent Command — ${projectName}
 
@@ -562,16 +783,39 @@ WS     /api/sessions/:id/agent    — Real-time agent WebSocket
 `;
 }
 
-function EndpointRow({ method, path, desc }: { method: string; path: string; desc: string }) {
-  const methodColor = method === 'POST' ? 'var(--success)' :
-    method === 'DELETE' ? 'var(--error)' :
-    method === 'WS' ? 'var(--accent)' : 'var(--text-secondary)';
+function EndpointRow({
+  method,
+  path,
+  desc,
+}: {
+  method: string;
+  path: string;
+  desc: string;
+}) {
+  const methodColor =
+    method === "POST"
+      ? "var(--success)"
+      : method === "DELETE"
+        ? "var(--error)"
+        : method === "WS"
+          ? "var(--accent)"
+          : "var(--text-secondary)";
 
   return (
     <div className="flex items-baseline gap-2 py-0.5">
-      <span className="w-12 text-right font-bold shrink-0" style={{ color: methodColor }}>{method}</span>
-      <span style={{ color: 'var(--text-primary)' }}>{path}</span>
-      <span className="text-[10px] ml-auto" style={{ color: 'var(--text-secondary)' }}>{desc}</span>
+      <span
+        className="w-12 text-right font-bold shrink-0"
+        style={{ color: methodColor }}
+      >
+        {method}
+      </span>
+      <span style={{ color: "var(--text-primary)" }}>{path}</span>
+      <span
+        className="text-[10px] ml-auto"
+        style={{ color: "var(--text-secondary)" }}
+      >
+        {desc}
+      </span>
     </div>
   );
 }

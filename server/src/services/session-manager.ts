@@ -1,28 +1,52 @@
-import { fork, execFile, execFileSync, spawn, type ChildProcess } from 'child_process';
-import { promisify } from 'util';
-import { createRequire } from 'module';
-import { readFile, readdirSync, readFileSync, writeFileSync as fsWriteFileSync, existsSync, unlinkSync, appendFileSync } from 'fs';
-import { join, dirname } from 'path';
-import { homedir } from 'os';
-import { fileURLToPath } from 'url';
-import { getDb } from '../db/index.js';
-import { insertEvent } from './event-store.js';
-import { config } from '../config.js';
-import { getSetting } from '../routes/settings.js';
-import { nanoid } from 'nanoid';
-import type { WebSocket } from 'ws';
-import { getOrCreateTracker, removeTracker, recoverFromBuffer } from './session-state.js';
+import {
+  fork,
+  execFile,
+  execFileSync,
+  spawn,
+  type ChildProcess,
+} from "child_process";
+import { promisify } from "util";
+import { createRequire } from "module";
+import {
+  readFile,
+  readdirSync,
+  readFileSync,
+  writeFileSync as fsWriteFileSync,
+  existsSync,
+  unlinkSync,
+  appendFileSync,
+} from "fs";
+import { join, dirname } from "path";
+import { homedir } from "os";
+import { fileURLToPath } from "url";
+import { getDb } from "../db/index.js";
+import { insertEvent } from "./event-store.js";
+import { config } from "../config.js";
+import { getSetting } from "../routes/settings.js";
+import { nanoid } from "nanoid";
+import type { WebSocket } from "ws";
+import {
+  getOrCreateTracker,
+  removeTracker,
+  recoverFromBuffer,
+} from "./session-state.js";
 
 const nodeRequire = createRequire(import.meta.url);
-const { Terminal: HeadlessTerminal } = nodeRequire('@xterm/headless') as { Terminal: any };
-const { SerializeAddon } = nodeRequire('@xterm/addon-serialize') as { SerializeAddon: any };
+const { Terminal: HeadlessTerminal } = nodeRequire("@xterm/headless") as {
+  Terminal: any;
+};
+const { SerializeAddon } = nodeRequire("@xterm/addon-serialize") as {
+  SerializeAddon: any;
+};
 
 const execFileAsync = promisify(execFile);
 const readFileAsync = promisify(readFile);
 
-const TIMING_LOG = '/tmp/octoally-timing.log';
+const TIMING_LOG = "/tmp/octoally-timing.log";
 function tlog(s: string): void {
-  try { appendFileSync(TIMING_LOG, `[${new Date().toISOString()}] ${s}\n`); } catch {}
+  try {
+    appendFileSync(TIMING_LOG, `[${new Date().toISOString()}] ${s}\n`);
+  } catch {}
 }
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -31,7 +55,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
    Restart storm detection & session spawn guard
    ================================================================ */
 
-const RESTART_LOG = '/tmp/octoally-restart-timestamps.json';
+const RESTART_LOG = "/tmp/octoally-restart-timestamps.json";
 /** Max server starts within RESTART_WINDOW_MS before we skip auto-resume */
 const RESTART_STORM_THRESHOLD = 3;
 const RESTART_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
@@ -45,22 +69,28 @@ const MAX_SESSION_RESUMES = 3;
 function recordServerStart(): void {
   let timestamps: number[] = [];
   try {
-    timestamps = JSON.parse(readFileSync(RESTART_LOG, 'utf-8'));
-  } catch { /* first run or corrupt */ }
+    timestamps = JSON.parse(readFileSync(RESTART_LOG, "utf-8"));
+  } catch {
+    /* first run or corrupt */
+  }
   const now = Date.now();
   timestamps.push(now);
   // Keep only timestamps within the window
-  timestamps = timestamps.filter(ts => now - ts < RESTART_WINDOW_MS);
-  try { fsWriteFileSync(RESTART_LOG, JSON.stringify(timestamps)); } catch {}
+  timestamps = timestamps.filter((ts) => now - ts < RESTART_WINDOW_MS);
+  try {
+    fsWriteFileSync(RESTART_LOG, JSON.stringify(timestamps));
+  } catch {}
 }
 
 function isRestartStorm(): boolean {
   let timestamps: number[] = [];
   try {
-    timestamps = JSON.parse(readFileSync(RESTART_LOG, 'utf-8'));
-  } catch { return false; }
+    timestamps = JSON.parse(readFileSync(RESTART_LOG, "utf-8"));
+  } catch {
+    return false;
+  }
   const now = Date.now();
-  const recent = timestamps.filter(ts => now - ts < RESTART_WINDOW_MS);
+  const recent = timestamps.filter((ts) => now - ts < RESTART_WINDOW_MS);
   return recent.length >= RESTART_STORM_THRESHOLD;
 }
 
@@ -73,9 +103,9 @@ export function isAtSessionLimit(): boolean {
 }
 
 /** Path to the PTY worker script — resolved relative to this file */
-const WORKER_SCRIPT = join(__dirname, 'pty-worker.js');
+const WORKER_SCRIPT = join(__dirname, "pty-worker.js");
 /** For tsx dev mode, use the .ts source directly */
-const WORKER_SCRIPT_TS = join(__dirname, 'pty-worker.ts');
+const WORKER_SCRIPT_TS = join(__dirname, "pty-worker.ts");
 
 function getWorkerScript(): string {
   // In dev (tsx), use .ts source. In production (compiled), use .js.
@@ -89,11 +119,15 @@ function getWorkerScript(): string {
    ================================================================ */
 
 function pushSystemEvent(text: string): void {
-  execFile('openclaw', ['system', 'event', '--text', text, '--mode', 'now'], (err) => {
-    if (err) {
-      // OpenClaw may not be running — silently ignore
-    }
-  });
+  execFile(
+    "openclaw",
+    ["system", "event", "--text", text, "--mode", "now"],
+    (err) => {
+      if (err) {
+        // OpenClaw may not be running — silently ignore
+      }
+    },
+  );
 }
 
 export interface Session {
@@ -118,8 +152,8 @@ interface ActiveSession {
   cols: number; // last known terminal column width
   task: string; // 'Terminal' for plain shells, task description for hivemind
   externalSocket?: string; // external hivemind dtach socket (adopted sessions)
-  replayBuffer: string[];  // ring buffer of recent output chunks for instant replay
-  replayBytes: number;     // total bytes in replayBuffer
+  replayBuffer: string[]; // ring buffer of recent output chunks for instant replay
+  replayBytes: number; // total bytes in replayBuffer
   wsPendingData: string | null; // batched WS output waiting to be sent
 }
 
@@ -130,14 +164,17 @@ const activeSessions = new Map<string, ActiveSession>();
 interface PendingSpawn {
   projectPath: string;
   task: string;
-  mode: 'hivemind' | 'terminal' | 'adopt' | 'agent';
+  mode: "hivemind" | "terminal" | "adopt" | "agent";
   agentType?: string;
   projectId?: string;
-  socketPath?: string;  // for adopt mode
+  socketPath?: string; // for adopt mode
 }
 const pendingSpawns = new Map<string, PendingSpawn>();
 
-export function registerPendingSpawn(sessionId: string, info: PendingSpawn): void {
+export function registerPendingSpawn(
+  sessionId: string,
+  info: PendingSpawn,
+): void {
   pendingSpawns.set(sessionId, info);
 }
 
@@ -145,7 +182,9 @@ export function getPendingSpawn(sessionId: string): PendingSpawn | undefined {
   return pendingSpawns.get(sessionId);
 }
 
-export function consumePendingSpawn(sessionId: string): PendingSpawn | undefined {
+export function consumePendingSpawn(
+  sessionId: string,
+): PendingSpawn | undefined {
   const info = pendingSpawns.get(sessionId);
   if (info) pendingSpawns.delete(sessionId);
   return info;
@@ -155,19 +194,22 @@ export function consumePendingSpawn(sessionId: string): PendingSpawn | undefined
    SQLite-backed PTY output storage (replaces in-memory buffer)
    ================================================================ */
 
-import type Database from 'better-sqlite3';
+import type Database from "better-sqlite3";
 let _insertStmt: Database.Statement | null = null;
 function getInsertStmt(): Database.Statement {
   if (!_insertStmt) {
     _insertStmt = getDb().prepare(
-      'INSERT INTO pty_output (session_id, seq, data) VALUES (?, ?, ?)'
+      "INSERT INTO pty_output (session_id, seq, data) VALUES (?, ?, ?)",
     );
   }
   return _insertStmt;
 }
 
 // Batch insert buffer: accumulate chunks and flush every 100ms
-const pendingInserts = new Map<string, { sessionId: string; seq: number; data: string }[]>();
+const pendingInserts = new Map<
+  string,
+  { sessionId: string; seq: number; data: string }[]
+>();
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Maximum rows to keep per session in pty_output (prevents unbounded growth)
@@ -200,8 +242,12 @@ function flushPtyInserts(): void {
       coalesced.push(batch[0]);
     } else {
       // Combine all chunks, use the last seq number
-      const combined = batch.map(r => r.data).join('');
-      coalesced.push({ sessionId, seq: batch[batch.length - 1].seq, data: combined });
+      const combined = batch.map((r) => r.data).join("");
+      coalesced.push({
+        sessionId,
+        seq: batch[batch.length - 1].seq,
+        data: combined,
+      });
     }
   }
 
@@ -219,7 +265,7 @@ function flushPtyInserts(): void {
     insertAll();
     pendingInserts.clear();
   } catch (err) {
-    console.error('Failed to flush pty_output inserts:', err);
+    console.error("Failed to flush pty_output inserts:", err);
     // Don't clear pendingInserts — retry on next flush cycle
   }
 
@@ -237,13 +283,19 @@ function prunePtyOutput(): void {
   try {
     const db = getDb();
     // Delete rows for completed/cancelled/failed sessions entirely
-    const dead = db.prepare(`
+    const dead = db
+      .prepare(
+        `
       DELETE FROM pty_output WHERE session_id IN (
         SELECT id FROM sessions WHERE status IN ('completed', 'cancelled', 'failed')
       )
-    `).run();
+    `,
+      )
+      .run();
     // For active sessions, keep only the last MAX_PTY_ROWS_PER_SESSION rows
-    const trimmed = db.prepare(`
+    const trimmed = db
+      .prepare(
+        `
       DELETE FROM pty_output WHERE rowid IN (
         SELECT p.rowid FROM pty_output p
         JOIN sessions s ON p.session_id = s.id
@@ -252,32 +304,41 @@ function prunePtyOutput(): void {
           SELECT MAX(p2.seq) - ? FROM pty_output p2 WHERE p2.session_id = p.session_id
         )
       )
-    `).run(MAX_PTY_ROWS_PER_SESSION);
+    `,
+      )
+      .run(MAX_PTY_ROWS_PER_SESSION);
 
     // Periodic VACUUM when we deleted a lot of data
     const totalDeleted = dead.changes + trimmed.changes;
     if (totalDeleted > 500) {
-      const freePages = (db.pragma('freelist_count') as { freelist_count: number }[])[0].freelist_count;
-      const pageSize = (db.pragma('page_size') as { page_size: number }[])[0].page_size;
-      const freeMB = freePages * pageSize / 1048576;
+      const freePages = (
+        db.pragma("freelist_count") as { freelist_count: number }[]
+      )[0].freelist_count;
+      const pageSize = (db.pragma("page_size") as { page_size: number }[])[0]
+        .page_size;
+      const freeMB = (freePages * pageSize) / 1048576;
       if (freeMB > 10) {
-        db.exec('VACUUM');
-        console.log(`  VACUUM reclaimed ~${freeMB.toFixed(1)}MB after pruning ${totalDeleted} rows`);
+        db.exec("VACUUM");
+        console.log(
+          `  VACUUM reclaimed ~${freeMB.toFixed(1)}MB after pruning ${totalDeleted} rows`,
+        );
       }
     }
   } catch (err) {
-    console.error('Failed to prune pty_output:', err);
+    console.error("Failed to prune pty_output:", err);
   }
 }
 
 /** Read last N chunks from SQLite for a session, ordered by seq */
 function readRecentOutput(sessionId: string, limit: number): string[] {
   const db = getDb();
-  const rows = db.prepare(
-    'SELECT data FROM pty_output WHERE session_id = ? ORDER BY seq DESC LIMIT ?'
-  ).all(sessionId, limit) as { data: string }[];
+  const rows = db
+    .prepare(
+      "SELECT data FROM pty_output WHERE session_id = ? ORDER BY seq DESC LIMIT ?",
+    )
+    .all(sessionId, limit) as { data: string }[];
   // Reverse so they're in chronological order
-  return rows.reverse().map(r => r.data);
+  return rows.reverse().map((r) => r.data);
 }
 
 /**
@@ -286,12 +347,18 @@ function readRecentOutput(sessionId: string, limit: number): string[] {
  * perfectly restore the visual state. Handles resize markers so the headless
  * terminal dimensions match the original session at each point.
  */
-async function serializeSessionOutput(sessionId: string, cols: number, rows: number): Promise<string | null> {
+async function serializeSessionOutput(
+  sessionId: string,
+  cols: number,
+  rows: number,
+): Promise<string | null> {
   const db = getDb();
   // Read up to 5000 chunks (enough for most sessions, caps processing time)
-  const dbRows = db.prepare(
-    'SELECT data FROM pty_output WHERE session_id = ? ORDER BY seq ASC LIMIT 5000'
-  ).all(sessionId) as { data: string }[];
+  const dbRows = db
+    .prepare(
+      "SELECT data FROM pty_output WHERE session_id = ? ORDER BY seq ASC LIMIT 5000",
+    )
+    .all(sessionId) as { data: string }[];
   if (dbRows.length === 0) return null;
 
   // Find first resize marker for initial dimensions
@@ -299,7 +366,7 @@ async function serializeSessionOutput(sessionId: string, cols: number, rows: num
   let initRows = rows;
   for (const row of dbRows) {
     if (row.data.startsWith(RESIZE_MARKER)) {
-      const parts = row.data.slice(RESIZE_MARKER.length).split(',');
+      const parts = row.data.slice(RESIZE_MARKER.length).split(",");
       initCols = parseInt(parts[0], 10) || cols;
       initRows = parseInt(parts[1], 10) || rows;
       break;
@@ -307,7 +374,10 @@ async function serializeSessionOutput(sessionId: string, cols: number, rows: num
   }
 
   const term = new HeadlessTerminal({
-    cols: initCols, rows: initRows, scrollback: 10000, allowProposedApi: true,
+    cols: initCols,
+    rows: initRows,
+    scrollback: 10000,
+    allowProposedApi: true,
   });
   const serializeAddon = new SerializeAddon();
   term.loadAddon(serializeAddon);
@@ -319,12 +389,15 @@ async function serializeSessionOutput(sessionId: string, cols: number, rows: num
     let idx = 0;
 
     function processNext() {
-      let batchData = '';
+      let batchData = "";
       while (idx < dbRows.length) {
         const row = dbRows[idx];
         if (row.data.startsWith(RESIZE_MARKER)) {
-          if (batchData) { term.write(batchData); batchData = ''; }
-          const parts = row.data.slice(RESIZE_MARKER.length).split(',');
+          if (batchData) {
+            term.write(batchData);
+            batchData = "";
+          }
+          const parts = row.data.slice(RESIZE_MARKER.length).split(",");
           const newCols = parseInt(parts[0], 10);
           const newRows = parseInt(parts[1], 10);
           if (newCols > 0 && newRows > 0) term.resize(newCols, newRows);
@@ -332,7 +405,10 @@ async function serializeSessionOutput(sessionId: string, cols: number, rows: num
           continue;
         }
         // Skip null-byte prefixed entries (other markers)
-        if (row.data.charCodeAt(0) === 0) { idx++; continue; }
+        if (row.data.charCodeAt(0) === 0) {
+          idx++;
+          continue;
+        }
         batchData += row.data;
         idx++;
         if (batchData.length >= MAX_BATCH) {
@@ -355,32 +431,46 @@ async function serializeSessionOutput(sessionId: string, cols: number, rows: num
   term.dispose();
 
   // Strip trailing blank lines (headless terminal captures all visible rows)
-  const lines = result.split('\n');
-  while (lines.length > 0 && lines[lines.length - 1].replace(/\x1b\[[0-9;]*m/g, '').trim() === '') {
+  const lines = result.split("\n");
+  while (
+    lines.length > 0 &&
+    lines[lines.length - 1].replace(/\x1b\[[0-9;]*m/g, "").trim() === ""
+  ) {
     lines.pop();
   }
   // Convert \n → \r\n for xterm.js (bare \n = LF-only → staircase)
-  const cleaned = lines.join('\r\n');
+  const cleaned = lines.join("\r\n");
   return cleaned || null;
 }
 
 /** Paginated output query: chunks before a given seq (or from the end if no before) */
 export function querySessionOutput(
   sessionId: string,
-  opts: { before?: number; limit: number }
-): { chunks: { seq: number; data: string }[]; hasMore: boolean; oldestSeq: number | null } {
+  opts: { before?: number; limit: number },
+): {
+  chunks: { seq: number; data: string }[];
+  hasMore: boolean;
+  oldestSeq: number | null;
+} {
   const db = getDb();
   const limit = Math.min(opts.limit, 500000);
 
   let rows: { seq: number; data: string }[];
   if (opts.before != null) {
-    rows = db.prepare(
-      'SELECT seq, data FROM pty_output WHERE session_id = ? AND seq < ? ORDER BY seq DESC LIMIT ?'
-    ).all(sessionId, opts.before, limit + 1) as { seq: number; data: string }[];
+    rows = db
+      .prepare(
+        "SELECT seq, data FROM pty_output WHERE session_id = ? AND seq < ? ORDER BY seq DESC LIMIT ?",
+      )
+      .all(sessionId, opts.before, limit + 1) as {
+      seq: number;
+      data: string;
+    }[];
   } else {
-    rows = db.prepare(
-      'SELECT seq, data FROM pty_output WHERE session_id = ? ORDER BY seq DESC LIMIT ?'
-    ).all(sessionId, limit + 1) as { seq: number; data: string }[];
+    rows = db
+      .prepare(
+        "SELECT seq, data FROM pty_output WHERE session_id = ? ORDER BY seq DESC LIMIT ?",
+      )
+      .all(sessionId, limit + 1) as { seq: number; data: string }[];
   }
 
   const hasMore = rows.length > limit;
@@ -399,21 +489,29 @@ export function querySessionOutput(
 /** Query output chunks after a given seq cursor (for incremental polling) */
 export function querySessionOutputSince(
   sessionId: string,
-  opts: { since?: number; limit: number }
-): { chunks: { seq: number; data: string }[]; hasMore: boolean; latestSeq: number | null } {
+  opts: { since?: number; limit: number },
+): {
+  chunks: { seq: number; data: string }[];
+  hasMore: boolean;
+  latestSeq: number | null;
+} {
   const db = getDb();
   const limit = Math.min(opts.limit, 500000);
 
   let rows: { seq: number; data: string }[];
   if (opts.since != null) {
-    rows = db.prepare(
-      'SELECT seq, data FROM pty_output WHERE session_id = ? AND seq > ? ORDER BY seq ASC LIMIT ?'
-    ).all(sessionId, opts.since, limit + 1) as { seq: number; data: string }[];
+    rows = db
+      .prepare(
+        "SELECT seq, data FROM pty_output WHERE session_id = ? AND seq > ? ORDER BY seq ASC LIMIT ?",
+      )
+      .all(sessionId, opts.since, limit + 1) as { seq: number; data: string }[];
   } else {
     // No cursor — return the last `limit` chunks (most recent)
-    rows = db.prepare(
-      'SELECT seq, data FROM pty_output WHERE session_id = ? ORDER BY seq DESC LIMIT ?'
-    ).all(sessionId, limit + 1) as { seq: number; data: string }[];
+    rows = db
+      .prepare(
+        "SELECT seq, data FROM pty_output WHERE session_id = ? ORDER BY seq DESC LIMIT ?",
+      )
+      .all(sessionId, limit + 1) as { seq: number; data: string }[];
     const hasMore = rows.length > limit;
     if (hasMore) rows = rows.slice(0, limit);
     rows.reverse();
@@ -440,9 +538,9 @@ export function querySessionOutputSince(
    the worker process.
    ================================================================ */
 
-const TMUX_SERVER = 'octoally';
-const LEGACY_TMUX_SERVERS = ['hivecommand', 'openflow'];
-const tmuxBaseArgs = ['-L', TMUX_SERVER];
+const TMUX_SERVER = "octoally";
+const LEGACY_TMUX_SERVERS = ["hivecommand", "openflow"];
+const tmuxBaseArgs = ["-L", TMUX_SERVER];
 
 function tmuxSessionName(sessionId: string): string {
   return `of-${sessionId}`;
@@ -453,9 +551,13 @@ function tmuxArgsForSession(sessionId: string): string[] {
   const name = tmuxSessionName(sessionId);
   for (const server of [TMUX_SERVER, ...LEGACY_TMUX_SERVERS]) {
     try {
-      execFileSync('tmux', ['-L', server, 'has-session', '-t', name], { stdio: 'ignore' });
-      return ['-L', server];
-    } catch { /* try next */ }
+      execFileSync("tmux", ["-L", server, "has-session", "-t", name], {
+        stdio: "ignore",
+      });
+      return ["-L", server];
+    } catch {
+      /* try next */
+    }
   }
   return tmuxBaseArgs;
 }
@@ -465,9 +567,11 @@ async function tmuxExistsAsync(sessionId: string): Promise<boolean> {
   const name = tmuxSessionName(sessionId);
   for (const server of [TMUX_SERVER, ...LEGACY_TMUX_SERVERS]) {
     try {
-      await execFileAsync('tmux', ['-L', server, 'has-session', '-t', name]);
+      await execFileAsync("tmux", ["-L", server, "has-session", "-t", name]);
       return true;
-    } catch { /* try next */ }
+    } catch {
+      /* try next */
+    }
   }
   return false;
 }
@@ -477,14 +581,20 @@ function tmuxListOctoallySessionIds(): string[] {
   const ids = new Set<string>();
   for (const server of [TMUX_SERVER, ...LEGACY_TMUX_SERVERS]) {
     try {
-      const output = execFileSync('tmux', ['-L', server, 'list-sessions', '-F', '#{session_name}'], { encoding: 'utf8' });
+      const output = execFileSync(
+        "tmux",
+        ["-L", server, "list-sessions", "-F", "#{session_name}"],
+        { encoding: "utf8" },
+      );
       output
         .trim()
-        .split('\n')
-        .filter(name => name.startsWith('of-'))
-        .map(name => name.replace('of-', ''))
-        .forEach(id => ids.add(id));
-    } catch { /* server not running */ }
+        .split("\n")
+        .filter((name) => name.startsWith("of-"))
+        .map((name) => name.replace("of-", ""))
+        .forEach((id) => ids.add(id));
+    } catch {
+      /* server not running */
+    }
   }
   return [...ids];
 }
@@ -493,7 +603,7 @@ function tmuxListOctoallySessionIds(): string[] {
    dtach helpers — only used for status checks in the main process.
    ================================================================ */
 
-const DTACH_PREFIXES = ['octoally-', 'hivecommand-', 'openflow-'];
+const DTACH_PREFIXES = ["octoally-", "hivecommand-", "openflow-"];
 
 /** Find the dtach socket for a session, checking all name prefixes */
 function dtachSocket(sessionId: string): string {
@@ -510,7 +620,7 @@ function dtachExists(sessionId: string): boolean {
   const sock = dtachSocket(sessionId);
   if (!existsSync(sock)) return false;
   try {
-    const stdout = execFileSync('fuser', [sock], { encoding: 'utf8' });
+    const stdout = execFileSync("fuser", [sock], { encoding: "utf8" });
     return stdout.trim().length > 0;
   } catch {
     return false;
@@ -522,7 +632,9 @@ async function dtachExistsAsync(sessionId: string): Promise<boolean> {
   const sock = dtachSocket(sessionId);
   if (!existsSync(sock)) return false;
   try {
-    const { stdout } = await execFileAsync('fuser', [sock], { encoding: 'utf8' });
+    const { stdout } = await execFileAsync("fuser", [sock], {
+      encoding: "utf8",
+    });
     return stdout.trim().length > 0;
   } catch {
     return false;
@@ -533,18 +645,20 @@ async function dtachExistsAsync(sessionId: string): Promise<boolean> {
 function dtachListOctoallySessions(): string[] {
   const ids = new Set<string>();
   try {
-    const files = readdirSync('/tmp');
+    const files = readdirSync("/tmp");
     for (const prefix of DTACH_PREFIXES) {
       files
-        .filter(f => f.startsWith(prefix) && f.endsWith('.sock'))
-        .forEach(f => {
-          const sessionId = f.replace(prefix, '').replace('.sock', '');
+        .filter((f) => f.startsWith(prefix) && f.endsWith(".sock"))
+        .forEach((f) => {
+          const sessionId = f.replace(prefix, "").replace(".sock", "");
           if (dtachExists(sessionId)) {
             ids.add(sessionId);
           }
         });
     }
-  } catch { /* /tmp read failed */ }
+  } catch {
+    /* /tmp read failed */
+  }
   return [...ids];
 }
 
@@ -554,26 +668,37 @@ function dtachListOctoallySessions(): string[] {
 
 /** Snapshot existing .jsonl UUIDs in a Claude project dir (for diffing after spawn) */
 function snapshotClaudeSessionFiles(projectPath: string): Set<string> {
-  const claudeProjectDir = join(homedir(), '.claude', 'projects', projectPath.replace(/\//g, '-'));
+  const claudeProjectDir = join(
+    homedir(),
+    ".claude",
+    "projects",
+    projectPath.replace(/\//g, "-"),
+  );
   try {
     return new Set(
       readdirSync(claudeProjectDir)
-        .filter(f => f.endsWith('.jsonl') && !f.includes('-topic-'))
-        .map(f => f.replace('.jsonl', ''))
+        .filter((f) => f.endsWith(".jsonl") && !f.includes("-topic-"))
+        .map((f) => f.replace(".jsonl", "")),
     );
   } catch {
     return new Set();
   }
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /**
  * Fork a PTY worker and wire up IPC message handlers.
  * The worker runs in a separate process, isolating all blocking PTY/tmux
  * operations from the main Fastify event loop.
  */
-function wireWorker(sessionId: string, worker: ChildProcess, projectPath?: string, preSpawnFiles?: Set<string>): ActiveSession {
+function wireWorker(
+  sessionId: string,
+  worker: ChildProcess,
+  projectPath?: string,
+  preSpawnFiles?: Set<string>,
+): ActiveSession {
   const tracker = getOrCreateTracker(sessionId);
 
   if (projectPath) {
@@ -583,18 +708,20 @@ function wireWorker(sessionId: string, worker: ChildProcess, projectPath?: strin
   // Resume seq counter from DB to avoid collisions after reconnect
   let startSeq = 0;
   try {
-    const row = getDb().prepare(
-      'SELECT MAX(seq) as maxSeq FROM pty_output WHERE session_id = ?'
-    ).get(sessionId) as { maxSeq: number | null } | undefined;
+    const row = getDb()
+      .prepare("SELECT MAX(seq) as maxSeq FROM pty_output WHERE session_id = ?")
+      .get(sessionId) as { maxSeq: number | null } | undefined;
     if (row?.maxSeq) startSeq = row.maxSeq;
-  } catch { /* fresh session */ }
+  } catch {
+    /* fresh session */
+  }
 
   const active: ActiveSession = {
     worker,
     subscribers: new Set(),
     seq: startSeq,
     cols: 120,
-    task: '',  // set by caller (spawnSession/spawnTerminal/reconnectSession)
+    task: "", // set by caller (spawnSession/spawnTerminal/reconnectSession)
     replayBuffer: [],
     replayBytes: 0,
     wsPendingData: null,
@@ -610,14 +737,25 @@ function wireWorker(sessionId: string, worker: ChildProcess, projectPath?: strin
     uuidPersisted = true;
     try {
       const db = getDb();
-      db.prepare('UPDATE sessions SET claude_session_id = ? WHERE id = ? AND claude_session_id IS NULL')
-        .run(uuid, sessionId);
-      console.log(`  Captured Claude session UUID ${uuid} for session ${sessionId}`);
-    } catch { /* ignore */ }
+      db.prepare(
+        "UPDATE sessions SET claude_session_id = ? WHERE id = ? AND claude_session_id IS NULL",
+      ).run(uuid, sessionId);
+      console.log(
+        `  Captured Claude session UUID ${uuid} for session ${sessionId}`,
+      );
+    } catch {
+      /* ignore */
+    }
 
     if (projectPath) {
-      const sanitized = projectPath.replace(/\//g, '-');
-      const jsonlPath = join(homedir(), '.claude', 'projects', sanitized, uuid + '.jsonl');
+      const sanitized = projectPath.replace(/\//g, "-");
+      const jsonlPath = join(
+        homedir(),
+        ".claude",
+        "projects",
+        sanitized,
+        uuid + ".jsonl",
+      );
       tracker.setJsonlFile(jsonlPath);
       console.log(`  JSONL output file: ${jsonlPath}`);
     }
@@ -625,39 +763,58 @@ function wireWorker(sessionId: string, worker: ChildProcess, projectPath?: strin
 
   // Fallback: diff ~/.claude/projects/<path>/ against pre-spawn snapshot
   if (projectPath && preSpawnFiles) {
-    const claudeProjectDir = join(homedir(), '.claude', 'projects', projectPath.replace(/\//g, '-'));
+    const claudeProjectDir = join(
+      homedir(),
+      ".claude",
+      "projects",
+      projectPath.replace(/\//g, "-"),
+    );
     let fileScanDone = false;
     const unsub = tracker.onStateChange(async (state) => {
-      if (fileScanDone || uuidPersisted) { fileScanDone = true; return; }
-      if (state.processState === 'waiting_for_input' || state.processState === 'idle') {
+      if (fileScanDone || uuidPersisted) {
+        fileScanDone = true;
+        return;
+      }
+      if (
+        state.processState === "waiting_for_input" ||
+        state.processState === "idle"
+      ) {
         fileScanDone = true;
         unsub();
         try {
-          const { readdir, stat: statAsync } = await import('fs/promises');
+          const { readdir, stat: statAsync } = await import("fs/promises");
           const allFiles = await readdir(claudeProjectDir);
           const currentFiles = allFiles
-            .filter(f => f.endsWith('.jsonl') && !f.includes('-topic-'))
-            .map(f => f.replace('.jsonl', ''));
-          const newFiles = currentFiles.filter(f => !preSpawnFiles.has(f) && UUID_RE.test(f));
+            .filter((f) => f.endsWith(".jsonl") && !f.includes("-topic-"))
+            .map((f) => f.replace(".jsonl", ""));
+          const newFiles = currentFiles.filter(
+            (f) => !preSpawnFiles.has(f) && UUID_RE.test(f),
+          );
           if (newFiles.length === 1) {
             persistUuid(newFiles[0]);
           } else if (newFiles.length > 1) {
-            const sorted = await Promise.all(newFiles.map(async f => {
-              const st = await statAsync(join(claudeProjectDir, f + '.jsonl'));
-              return { uuid: f, mtime: st.mtimeMs };
-            }));
+            const sorted = await Promise.all(
+              newFiles.map(async (f) => {
+                const st = await statAsync(
+                  join(claudeProjectDir, f + ".jsonl"),
+                );
+                return { uuid: f, mtime: st.mtimeMs };
+              }),
+            );
             sorted.sort((a, b) => b.mtime - a.mtime);
             persistUuid(sorted[0].uuid);
           }
-        } catch { /* dir may not exist yet */ }
+        } catch {
+          /* dir may not exist yet */
+        }
       }
     });
   }
 
   // Handle IPC messages from the worker
-  worker.on('message', (msg: any) => {
+  worker.on("message", (msg: any) => {
     switch (msg.type) {
-      case 'output': {
+      case "output": {
         // Display output — store in DB for replay on restart
         active.seq++;
         queuePtyInsert(sessionId, active.seq, msg.data);
@@ -680,7 +837,7 @@ function wireWorker(sessionId: string, worker: ChildProcess, projectPath?: strin
             active.wsPendingData = null;
             for (const ws of active.subscribers) {
               try {
-                ws.send(JSON.stringify({ type: 'output', sessionId, data }));
+                ws.send(JSON.stringify({ type: "output", sessionId, data }));
               } catch {
                 active.subscribers.delete(ws);
               }
@@ -692,7 +849,7 @@ function wireWorker(sessionId: string, worker: ChildProcess, projectPath?: strin
         break;
       }
 
-      case 'pty-data': {
+      case "pty-data": {
         // Raw PTY output for state tracking (not necessarily display output)
         tracker.onData(msg.data);
         if (!uuidPersisted && tracker.claudeSessionId) {
@@ -701,63 +858,96 @@ function wireWorker(sessionId: string, worker: ChildProcess, projectPath?: strin
         break;
       }
 
-      case 'ready': {
+      case "ready": {
         // Worker has spawned the PTY
         const db = getDb();
-        db.prepare(`
+        db.prepare(
+          `
           UPDATE sessions SET status = 'running', pid = ?, started_at = COALESCE(started_at, datetime('now')), updated_at = datetime('now')
           WHERE id = ?
-        `).run(msg.pid, sessionId);
+        `,
+        ).run(msg.pid, sessionId);
         break;
       }
 
-      case 'exit': {
+      case "exit": {
         // PTY exited in the worker — flush pending writes, then delete pty_output
         if (pendingInserts.has(sessionId)) {
           flushPtyInserts();
         }
         // Session is done — delete replay data immediately
-        try { getDb().prepare('DELETE FROM pty_output WHERE session_id = ?').run(sessionId); } catch { /* ignore */ }
+        try {
+          getDb()
+            .prepare("DELETE FROM pty_output WHERE session_id = ?")
+            .run(sessionId);
+        } catch {
+          /* ignore */
+        }
         removeTracker(sessionId);
         activeSessions.delete(sessionId);
 
         const db = getDb();
-        const status = msg.exitCode === 0 ? 'completed' : 'failed';
-        db.prepare(`
+        const status = msg.exitCode === 0 ? "completed" : "failed";
+        db.prepare(
+          `
           UPDATE sessions SET status = ?, exit_code = ?, completed_at = datetime('now'), updated_at = datetime('now')
           WHERE id = ? AND status NOT IN ('detached', 'cancelled', 'released')
-        `).run(status, msg.exitCode, sessionId);
+        `,
+        ).run(status, msg.exitCode, sessionId);
 
         insertEvent({
           session_id: sessionId,
-          type: 'session_end',
+          type: "session_end",
           data: { exitCode: msg.exitCode, signal: msg.signal },
         });
 
         const taskSnippet = (() => {
-          try { return (getDb().prepare('SELECT task FROM sessions WHERE id = ?').get(sessionId) as any)?.task?.slice(0, 60) ?? ''; } catch { return ''; }
+          try {
+            return (
+              (
+                getDb()
+                  .prepare("SELECT task FROM sessions WHERE id = ?")
+                  .get(sessionId) as any
+              )?.task?.slice(0, 60) ?? ""
+            );
+          } catch {
+            return "";
+          }
         })();
-        pushSystemEvent(`[OctoAlly] Session ${sessionId} ${status} (exit ${msg.exitCode}): ${taskSnippet}`);
+        pushSystemEvent(
+          `[OctoAlly] Session ${sessionId} ${status} (exit ${msg.exitCode}): ${taskSnippet}`,
+        );
 
         for (const ws of active.subscribers) {
           try {
-            ws.send(JSON.stringify({ type: 'exit', sessionId, exitCode: msg.exitCode, signal: msg.signal }));
-          } catch { /* ignore */ }
+            ws.send(
+              JSON.stringify({
+                type: "exit",
+                sessionId,
+                exitCode: msg.exitCode,
+                signal: msg.signal,
+              }),
+            );
+          } catch {
+            /* ignore */
+          }
         }
         break;
       }
 
-      case 'killed': {
+      case "killed": {
         // Worker acknowledged kill
         break;
       }
 
-      case 'error': {
-        console.error(`[WORKER] Error for session ${sessionId}: ${msg.message}`);
+      case "error": {
+        console.error(
+          `[WORKER] Error for session ${sessionId}: ${msg.message}`,
+        );
         break;
       }
 
-      case 'worker-ready': {
+      case "worker-ready": {
         // Worker process started, ready to receive spawn/reconnect messages
         break;
       }
@@ -765,7 +955,7 @@ function wireWorker(sessionId: string, worker: ChildProcess, projectPath?: strin
   });
 
   // Handle worker process exit (crash, disconnect)
-  worker.on('exit', async (code, _signal) => {
+  worker.on("exit", async (code, _signal) => {
     if (activeSessions.has(sessionId)) {
       // Worker died unexpectedly — clean up
       if (pendingInserts.has(sessionId)) {
@@ -775,31 +965,43 @@ function wireWorker(sessionId: string, worker: ChildProcess, projectPath?: strin
       activeSessions.delete(sessionId);
 
       // Check if the underlying tmux/dtach session is still alive (async to avoid blocking)
-      const tmuxAlive = config.useTmux ? await tmuxExistsAsync(sessionId) : false;
-      const dtachAlive = config.useDtach ? await dtachExistsAsync(sessionId) : false;
+      const tmuxAlive = config.useTmux
+        ? await tmuxExistsAsync(sessionId)
+        : false;
+      const dtachAlive = config.useDtach
+        ? await dtachExistsAsync(sessionId)
+        : false;
 
       const db = getDb();
       if (tmuxAlive || dtachAlive) {
-        db.prepare(`
+        db.prepare(
+          `
           UPDATE sessions SET status = 'detached', updated_at = datetime('now')
           WHERE id = ? AND status = 'running'
-        `).run(sessionId);
+        `,
+        ).run(sessionId);
       } else {
-        db.prepare(`
+        db.prepare(
+          `
           UPDATE sessions SET status = 'failed', exit_code = ?, completed_at = datetime('now'), updated_at = datetime('now')
           WHERE id = ? AND status NOT IN ('detached', 'cancelled', 'completed', 'released')
-        `).run(code ?? -1, sessionId);
+        `,
+        ).run(code ?? -1, sessionId);
       }
 
       for (const ws of active.subscribers) {
         try {
-          ws.send(JSON.stringify({ type: 'exit', sessionId, exitCode: code ?? -1 }));
-        } catch { /* ignore */ }
+          ws.send(
+            JSON.stringify({ type: "exit", sessionId, exitCode: code ?? -1 }),
+          );
+        } catch {
+          /* ignore */
+        }
       }
     }
   });
 
-  worker.on('error', (err) => {
+  worker.on("error", (err) => {
     console.error(`[WORKER] Process error for session ${sessionId}:`, err);
   });
 
@@ -818,27 +1020,27 @@ function forkWorker(): Promise<ChildProcess> {
     // When running under tsx (dev mode), this ensures the child also uses tsx
     // to handle .ts files. In production (compiled .js), plain node works.
     const worker = fork(script, [], {
-      stdio: ['pipe', 'inherit', 'inherit', 'ipc'],
+      stdio: ["pipe", "inherit", "inherit", "ipc"],
     });
 
     const timeout = setTimeout(() => {
-      reject(new Error('Worker startup timed out'));
-      worker.kill('SIGKILL');
+      reject(new Error("Worker startup timed out"));
+      worker.kill("SIGKILL");
     }, 10000);
 
-    worker.once('message', (msg: any) => {
-      if (msg.type === 'worker-ready') {
+    worker.once("message", (msg: any) => {
+      if (msg.type === "worker-ready") {
         clearTimeout(timeout);
         resolve(worker);
       }
     });
 
-    worker.once('error', (err) => {
+    worker.once("error", (err) => {
       clearTimeout(timeout);
       reject(err);
     });
 
-    worker.once('exit', (code) => {
+    worker.once("exit", (code) => {
       clearTimeout(timeout);
       if (code !== 0) {
         reject(new Error(`Worker exited with code ${code}`));
@@ -851,19 +1053,31 @@ function forkWorker(): Promise<ChildProcess> {
    Session lifecycle
    ================================================================ */
 
-export function createSession(_projectPath: string, task: string, projectId?: string): Session {
+export function createSession(
+  _projectPath: string,
+  task: string,
+  projectId?: string,
+): Session {
   const db = getDb();
   const id = nanoid(12);
 
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO sessions (id, project_id, task, status)
     VALUES (?, ?, ?, 'pending')
-  `).run(id, projectId || null, task);
+  `,
+  ).run(id, projectId || null, task);
 
-  return db.prepare('SELECT * FROM sessions WHERE id = ?').get(id) as Session;
+  return db.prepare("SELECT * FROM sessions WHERE id = ?").get(id) as Session;
 }
 
-export async function spawnClaudeFlow(sessionId: string, projectPath: string, task: string, cols = 180, rows = 40): Promise<void> {
+export async function spawnClaudeFlow(
+  sessionId: string,
+  projectPath: string,
+  task: string,
+  cols = 180,
+  rows = 40,
+): Promise<void> {
   const preSpawnFiles = snapshotClaudeSessionFiles(projectPath);
 
   const worker = await forkWorker();
@@ -873,39 +1087,46 @@ export async function spawnClaudeFlow(sessionId: string, projectPath: string, ta
 
   // Tell the worker to spawn the session
   worker.send({
-    type: 'spawn',
+    type: "spawn",
     sessionId,
     projectPath,
     task,
-    mode: 'hivemind',
+    mode: "hivemind",
     cols,
     rows,
     useTmux: config.useTmux,
     useDtach: config.useDtach,
-    rufloCommand: getSetting('ruflo_command'),
+    rufloCommand: getSetting("ruflo_command"),
   });
 
   insertEvent({
     session_id: sessionId,
-    type: 'session_start',
+    type: "session_start",
     data: { task, projectPath, tmux: config.useTmux, dtach: config.useDtach },
   });
 
-  pushSystemEvent(`[OctoAlly] Session ${sessionId} started: ${task.slice(0, 60)}`);
+  pushSystemEvent(
+    `[OctoAlly] Session ${sessionId} started: ${task.slice(0, 60)}`,
+  );
 }
 
-export async function spawnTerminal(sessionId: string, projectPath: string, cols = 180, rows = 40): Promise<void> {
+export async function spawnTerminal(
+  sessionId: string,
+  projectPath: string,
+  cols = 180,
+  rows = 40,
+): Promise<void> {
   const worker = await forkWorker();
   const active = wireWorker(sessionId, worker, projectPath);
   active.cols = cols;
-  active.task = 'Terminal';
+  active.task = "Terminal";
 
   worker.send({
-    type: 'spawn',
+    type: "spawn",
     sessionId,
     projectPath,
-    task: 'Terminal',
-    mode: 'terminal',
+    task: "Terminal",
+    mode: "terminal",
     cols,
     rows,
     useTmux: config.useTmux,
@@ -914,12 +1135,24 @@ export async function spawnTerminal(sessionId: string, projectPath: string, cols
 
   insertEvent({
     session_id: sessionId,
-    type: 'session_start',
-    data: { task: 'Terminal', projectPath, tmux: config.useTmux, mode: 'terminal' },
+    type: "session_start",
+    data: {
+      task: "Terminal",
+      projectPath,
+      tmux: config.useTmux,
+      mode: "terminal",
+    },
   });
 }
 
-export async function spawnAgent(sessionId: string, projectPath: string, task: string, agentType: string, cols = 180, rows = 40): Promise<void> {
+export async function spawnAgent(
+  sessionId: string,
+  projectPath: string,
+  task: string,
+  agentType: string,
+  cols = 180,
+  rows = 40,
+): Promise<void> {
   const preSpawnFiles = snapshotClaudeSessionFiles(projectPath);
 
   const worker = await forkWorker();
@@ -928,45 +1161,58 @@ export async function spawnAgent(sessionId: string, projectPath: string, task: s
   active.task = `Agent (${agentType}): ${task}`;
 
   worker.send({
-    type: 'spawn',
+    type: "spawn",
     sessionId,
     projectPath,
     task,
-    mode: 'agent',
+    mode: "agent",
     agentType,
     cols,
     rows,
     useTmux: config.useTmux,
     useDtach: config.useDtach,
-    rufloCommand: getSetting('ruflo_command'),
+    rufloCommand: getSetting("ruflo_command"),
   });
 
   insertEvent({
     session_id: sessionId,
-    type: 'session_start',
-    data: { task, projectPath, tmux: config.useTmux, mode: 'agent', agentType },
+    type: "session_start",
+    data: { task, projectPath, tmux: config.useTmux, mode: "agent", agentType },
   });
 
-  pushSystemEvent(`[OctoAlly] Agent ${agentType} session ${sessionId} started: ${task.slice(0, 60)}`);
+  pushSystemEvent(
+    `[OctoAlly] Agent ${agentType} session ${sessionId} started: ${task.slice(0, 60)}`,
+  );
 }
 
 /**
  * Reconnect to a detached session (tmux or dtach) after a server restart.
  * Forks a new worker process that attaches to the surviving session.
  */
-export async function reconnectSession(sessionId: string, opts?: { skipPipePaneReplay?: boolean }): Promise<boolean> {
+export async function reconnectSession(
+  sessionId: string,
+  opts?: { skipPipePaneReplay?: boolean },
+): Promise<boolean> {
   const t0 = Date.now();
   if (activeSessions.has(sessionId)) return false;
 
   const db = getDb();
-  const session = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId) as Session | undefined;
-  if (!session || session.status !== 'detached') return false;
+  const session = db
+    .prepare("SELECT * FROM sessions WHERE id = ?")
+    .get(sessionId) as Session | undefined;
+  if (!session || session.status !== "detached") return false;
 
   // Quick check if underlying session is alive before forking a worker (async to avoid blocking)
   const tCheck = Date.now();
-  const hasTmuxSession = config.useTmux ? await tmuxExistsAsync(sessionId) : false;
-  const hasDtachSession = config.useDtach ? await dtachExistsAsync(sessionId) : false;
-  tlog(`[RECONNECT] ${sessionId}: exists_check=${Date.now() - tCheck}ms (tmux=${hasTmuxSession}, dtach=${hasDtachSession})`);
+  const hasTmuxSession = config.useTmux
+    ? await tmuxExistsAsync(sessionId)
+    : false;
+  const hasDtachSession = config.useDtach
+    ? await dtachExistsAsync(sessionId)
+    : false;
+  tlog(
+    `[RECONNECT] ${sessionId}: exists_check=${Date.now() - tCheck}ms (tmux=${hasTmuxSession}, dtach=${hasDtachSession})`,
+  );
   if (!hasTmuxSession && !hasDtachSession) return false;
 
   try {
@@ -979,7 +1225,7 @@ export async function reconnectSession(sessionId: string, opts?: { skipPipePaneR
     const active = wireWorker(sessionId, worker);
     tlog(`[RECONNECT] ${sessionId}: wireWorker=${Date.now() - t2}ms`);
     active.cols = session.terminal_cols || 120;
-    active.task = session.task || '';
+    active.task = session.task || "";
 
     // Restore externalSocket for adopted sessions (persisted in DB column)
     if ((session as any).external_socket) {
@@ -987,7 +1233,7 @@ export async function reconnectSession(sessionId: string, opts?: { skipPipePaneR
     }
 
     worker.send({
-      type: 'reconnect',
+      type: "reconnect",
       sessionId,
       cols: session.terminal_cols || 120,
       rows: 40,
@@ -1001,7 +1247,9 @@ export async function reconnectSession(sessionId: string, opts?: { skipPipePaneR
     if (recoveryChunks.length > 0) {
       recoverFromBuffer(sessionId, recoveryChunks);
     }
-    tlog(`[RECONNECT] ${sessionId}: recovery=${Date.now() - t3}ms (${recoveryChunks.length} chunks)`);
+    tlog(
+      `[RECONNECT] ${sessionId}: recovery=${Date.now() - t3}ms (${recoveryChunks.length} chunks)`,
+    );
 
     // Seed replay buffer for instant replay on client connect.
     // Plain terminals: render stored pipe-pane output through a HeadlessTerminal
@@ -1009,7 +1257,7 @@ export async function reconnectSession(sessionId: string, opts?: { skipPipePaneR
     // Hivemind: fall back to tmux capture-pane (hivemind redraws on SIGWINCH).
     const seedStart = Date.now();
     let seeded = false;
-    if (session.task === 'Terminal' && !opts?.skipPipePaneReplay) {
+    if (session.task === "Terminal" && !opts?.skipPipePaneReplay) {
       try {
         const serialized = await serializeSessionOutput(
           sessionId,
@@ -1020,37 +1268,59 @@ export async function reconnectSession(sessionId: string, opts?: { skipPipePaneR
           active.replayBuffer.push(serialized);
           active.replayBytes = serialized.length;
           seeded = true;
-          tlog(`[RECONNECT] ${sessionId}: serialize-seed=${Date.now() - seedStart}ms (${serialized.length} bytes)`);
+          tlog(
+            `[RECONNECT] ${sessionId}: serialize-seed=${Date.now() - seedStart}ms (${serialized.length} bytes)`,
+          );
         }
-      } catch (err) { tlog(`[RECONNECT] ${sessionId}: serialize-seed error: ${err}`); }
+      } catch (err) {
+        tlog(`[RECONNECT] ${sessionId}: serialize-seed error: ${err}`);
+      }
     }
     if (!seeded && config.useTmux && hasTmuxSession) {
       // Fallback: capture-pane (for hivemind or when DB has no data)
       try {
         const name = tmuxSessionName(sessionId);
-        const { stdout: rawStdout } = await execFileAsync('tmux', [
-          ...tmuxArgsForSession(sessionId), 'capture-pane', '-t', name, '-p', '-e', '-T', '-S', '-',
-        ], { encoding: 'utf8', maxBuffer: 5 * 1024 * 1024 });
+        const { stdout: rawStdout } = await execFileAsync(
+          "tmux",
+          [
+            ...tmuxArgsForSession(sessionId),
+            "capture-pane",
+            "-t",
+            name,
+            "-p",
+            "-e",
+            "-T",
+            "-S",
+            "-",
+          ],
+          { encoding: "utf8", maxBuffer: 5 * 1024 * 1024 },
+        );
         const stdout = trimCaptureOutput(rawStdout);
         if (stdout) {
           // Convert \n to \r\n for xterm.js — bare \n causes staircase (LF without CR)
-          const converted = stdout.replace(/\r?\n/g, '\r\n');
+          const converted = stdout.replace(/\r?\n/g, "\r\n");
           active.replayBuffer.push(converted);
           active.replayBytes = converted.length;
           captureCache.set(sessionId, { data: converted, ts: Date.now() });
         }
-        tlog(`[RECONNECT] ${sessionId}: capture-seed=${Date.now() - seedStart}ms (${stdout?.length || 0} bytes)`);
-      } catch { /* tmux might not be ready yet */ }
+        tlog(
+          `[RECONNECT] ${sessionId}: capture-seed=${Date.now() - seedStart}ms (${stdout?.length || 0} bytes)`,
+        );
+      } catch {
+        /* tmux might not be ready yet */
+      }
     }
 
-    db.prepare(`
+    db.prepare(
+      `
       UPDATE sessions SET status = 'running', updated_at = datetime('now')
       WHERE id = ?
-    `).run(sessionId);
+    `,
+    ).run(sessionId);
 
     insertEvent({
       session_id: sessionId,
-      type: 'session_reconnect',
+      type: "session_reconnect",
       data: { tmux: hasTmuxSession },
     });
 
@@ -1066,14 +1336,20 @@ export async function reconnectSession(sessionId: string, opts?: { skipPipePaneR
    Terminal attachment
    ================================================================ */
 
-export function attachTerminal(sessionId: string, ws: WebSocket, options?: { skipReplay?: boolean; skipSubscribe?: boolean }): boolean {
-  tlog(`[ATTACH] ${sessionId}: start (active=${activeSessions.has(sessionId)})`);
+export function attachTerminal(
+  sessionId: string,
+  ws: WebSocket,
+  options?: { skipReplay?: boolean; skipSubscribe?: boolean },
+): boolean {
+  tlog(
+    `[ATTACH] ${sessionId}: start (active=${activeSessions.has(sessionId)})`,
+  );
   const active = activeSessions.get(sessionId);
   if (!active) return false;
 
   if (!options?.skipSubscribe) {
     active.subscribers.add(ws);
-    ws.on('close', () => {
+    ws.on("close", () => {
       active.subscribers.delete(ws);
     });
   }
@@ -1088,7 +1364,7 @@ export function attachTerminal(sessionId: string, ws: WebSocket, options?: { ski
 
 // Resize marker prefix stored in pty_output — allows history replay to
 // resize the headless terminal at the correct points in the data stream.
-export const RESIZE_MARKER = '\x00RESIZE:';
+export const RESIZE_MARKER = "\x00RESIZE:";
 
 /** Send a replay of the current terminal state to a single WebSocket subscriber.
  *  Uses the in-memory replay buffer for instant replay (raw pipe-pane output).
@@ -1100,11 +1376,13 @@ export function sendReplay(sessionId: string, ws: WebSocket): void {
 
   if (active.replayBuffer.length > 0) {
     // Fast path: replay from in-memory buffer (instant, no tmux round-trip)
-    const data = '\x1b[H\x1b[2J\x1b[3J' + active.replayBuffer.join('');
+    const data = "\x1b[H\x1b[2J\x1b[3J" + active.replayBuffer.join("");
     tlog(`[REPLAY] ${sessionId}: from buffer (${active.replayBytes} bytes)`);
     try {
-      ws.send(JSON.stringify({ type: 'output', sessionId, data }));
-    } catch { /* ws closed */ }
+      ws.send(JSON.stringify({ type: "output", sessionId, data }));
+    } catch {
+      /* ws closed */
+    }
     return;
   }
 
@@ -1118,11 +1396,14 @@ export function sendReplay(sessionId: string, ws: WebSocket): void {
  *  This prevents replay from showing a bunch of blank space with the cursor at the bottom. */
 function trimCaptureOutput(output: string): string {
   // Split by newlines, strip trailing empty/whitespace-only lines (may contain ANSI resets)
-  const lines = output.split('\n');
-  while (lines.length > 0 && lines[lines.length - 1].replace(/\x1b\[[0-9;]*m/g, '').trim() === '') {
+  const lines = output.split("\n");
+  while (
+    lines.length > 0 &&
+    lines[lines.length - 1].replace(/\x1b\[[0-9;]*m/g, "").trim() === ""
+  ) {
     lines.pop();
   }
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 /**
@@ -1135,21 +1416,28 @@ function trimCaptureOutput(output: string): string {
 const captureCache = new Map<string, { data: string; ts: number }>();
 const CAPTURE_CACHE_TTL = 2000; // 2 seconds
 
-export function requestCapture(sessionId: string, ws: WebSocket): Promise<void> {
+export function requestCapture(
+  sessionId: string,
+  ws: WebSocket,
+): Promise<void> {
   const t0 = Date.now();
   if (!config.useTmux) return Promise.resolve();
 
   // Serve from cache if fresh
   const cached = captureCache.get(sessionId);
-  if (cached && (Date.now() - cached.ts) < CAPTURE_CACHE_TTL) {
+  if (cached && Date.now() - cached.ts < CAPTURE_CACHE_TTL) {
     tlog(`[CAPTURE] ${sessionId}: from cache (${cached.data.length} bytes)`);
     try {
-      ws.send(JSON.stringify({
-        type: 'output',
-        sessionId,
-        data: '\x1b[H\x1b[2J\x1b[3J' + cached.data,
-      }));
-    } catch { /* ws may have closed */ }
+      ws.send(
+        JSON.stringify({
+          type: "output",
+          sessionId,
+          data: "\x1b[H\x1b[2J\x1b[3J" + cached.data,
+        }),
+      );
+    } catch {
+      /* ws may have closed */
+    }
     return Promise.resolve();
   }
 
@@ -1157,49 +1445,73 @@ export function requestCapture(sessionId: string, ws: WebSocket): Promise<void> 
   const name = tmuxSessionName(sessionId);
   return new Promise((resolve) => {
     const chunks: string[] = [];
-    const proc = spawn('tmux', [
-      ...tmuxArgsForSession(sessionId), 'capture-pane', '-t', name, '-p', '-e', '-T',
-    ], { stdio: ['ignore', 'pipe', 'ignore'] });
+    const proc = spawn(
+      "tmux",
+      [
+        ...tmuxArgsForSession(sessionId),
+        "capture-pane",
+        "-t",
+        name,
+        "-p",
+        "-e",
+        "-T",
+      ],
+      { stdio: ["ignore", "pipe", "ignore"] },
+    );
 
-    proc.stdout!.setEncoding('utf8');
-    proc.stdout!.on('data', (chunk: string) => chunks.push(chunk));
+    proc.stdout!.setEncoding("utf8");
+    proc.stdout!.on("data", (chunk: string) => chunks.push(chunk));
 
-    proc.on('close', (code) => {
-      const stdout = trimCaptureOutput(chunks.join(''));
-      tlog(`[CAPTURE] ${sessionId}: done in ${Date.now() - t0}ms (${stdout.length} bytes, code=${code})`);
+    proc.on("close", (code) => {
+      const stdout = trimCaptureOutput(chunks.join(""));
+      tlog(
+        `[CAPTURE] ${sessionId}: done in ${Date.now() - t0}ms (${stdout.length} bytes, code=${code})`,
+      );
       if (code === 0 && stdout) {
         // Convert \n to \r\n for xterm.js — bare \n causes staircase (LF without CR)
-        const converted = stdout.replace(/\r?\n/g, '\r\n');
+        const converted = stdout.replace(/\r?\n/g, "\r\n");
         captureCache.set(sessionId, { data: converted, ts: Date.now() });
         try {
-          ws.send(JSON.stringify({
-            type: 'output',
-            sessionId,
-            data: '\x1b[H\x1b[2J\x1b[3J' + converted,
-          }));
-        } catch { /* ws may have closed */ }
+          ws.send(
+            JSON.stringify({
+              type: "output",
+              sessionId,
+              data: "\x1b[H\x1b[2J\x1b[3J" + converted,
+            }),
+          );
+        } catch {
+          /* ws may have closed */
+        }
       }
       resolve();
     });
 
-    proc.on('error', () => resolve());
+    proc.on("error", () => resolve());
   });
 }
 
-export function writeToSession(sessionId: string, data: string, bracketedPaste?: boolean): boolean {
+export function writeToSession(
+  sessionId: string,
+  data: string,
+  bracketedPaste?: boolean,
+): boolean {
   const active = activeSessions.get(sessionId);
   if (!active) return false;
   // Send input to the worker process via IPC
-  active.worker.send({ type: 'input', data, bracketedPaste });
+  active.worker.send({ type: "input", data, bracketedPaste });
   return true;
 }
 
-export function resizeSession(sessionId: string, cols: number, rows: number): boolean {
+export function resizeSession(
+  sessionId: string,
+  cols: number,
+  rows: number,
+): boolean {
   const active = activeSessions.get(sessionId);
   if (!active) return false;
 
   // Send resize to the worker process via IPC
-  active.worker.send({ type: 'resize', cols, rows });
+  active.worker.send({ type: "resize", cols, rows });
 
   active.cols = cols;
 
@@ -1210,7 +1522,10 @@ export function resizeSession(sessionId: string, cols: number, rows: number): bo
   // Persist last known cols
   try {
     const db = getDb();
-    db.prepare('UPDATE sessions SET terminal_cols = ? WHERE id = ?').run(cols, sessionId);
+    db.prepare("UPDATE sessions SET terminal_cols = ? WHERE id = ?").run(
+      cols,
+      sessionId,
+    );
   } catch {}
   return true;
 }
@@ -1220,7 +1535,9 @@ export function getSessionCols(sessionId: string): number {
   if (active) return active.cols;
   try {
     const db = getDb();
-    const row = db.prepare('SELECT terminal_cols FROM sessions WHERE id = ?').get(sessionId) as { terminal_cols: number | null } | undefined;
+    const row = db
+      .prepare("SELECT terminal_cols FROM sessions WHERE id = ?")
+      .get(sessionId) as { terminal_cols: number | null } | undefined;
     return row?.terminal_cols || 250;
   } catch {
     return 250;
@@ -1232,21 +1549,30 @@ export function getSessionCols(sessionId: string): number {
    ================================================================ */
 
 function pidAlive(pid: number): boolean {
-  try { process.kill(pid, 0); return true; } catch { return false; }
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
  * Kill an orphaned ruflo daemon and its headless worker children.
  */
 function killOrphanedDaemon(workingDir: string): void {
-  const pidFile = join(workingDir, '.ruflo', 'daemon.pid');
+  const pidFile = join(workingDir, ".ruflo", "daemon.pid");
   if (!existsSync(pidFile)) return;
 
   let daemonPid: number;
   try {
-    daemonPid = parseInt(readFileSync(pidFile, 'utf-8').trim(), 10);
+    daemonPid = parseInt(readFileSync(pidFile, "utf-8").trim(), 10);
     if (isNaN(daemonPid) || !pidAlive(daemonPid)) {
-      try { unlinkSync(pidFile); } catch { /* ignore */ }
+      try {
+        unlinkSync(pidFile);
+      } catch {
+        /* ignore */
+      }
       return;
     }
   } catch {
@@ -1254,35 +1580,58 @@ function killOrphanedDaemon(workingDir: string): void {
   }
 
   try {
-    const cmdline = readFileSync(`/proc/${daemonPid}/cmdline`, 'utf-8');
-    if (!cmdline.includes('cli.js') || !cmdline.includes('daemon')) {
+    const cmdline = readFileSync(`/proc/${daemonPid}/cmdline`, "utf-8");
+    if (!cmdline.includes("cli.js") || !cmdline.includes("daemon")) {
       return;
     }
   } catch {
     return;
   }
 
-  console.log(`  Killing orphaned ruflo daemon PID ${daemonPid} in ${workingDir}`);
+  console.log(
+    `  Killing orphaned ruflo daemon PID ${daemonPid} in ${workingDir}`,
+  );
 
   try {
-    const pgrepOut = execFileSync('pgrep', ['-P', String(daemonPid)], { encoding: 'utf8' });
-    const childPids = pgrepOut.trim().split('\n').filter(Boolean).map(Number);
+    const pgrepOut = execFileSync("pgrep", ["-P", String(daemonPid)], {
+      encoding: "utf8",
+    });
+    const childPids = pgrepOut.trim().split("\n").filter(Boolean).map(Number);
     for (const childPid of childPids) {
       try {
-        const childCmdline = readFileSync(`/proc/${childPid}/comm`, 'utf-8').trim();
-        if (childCmdline === 'claude') {
-          process.kill(childPid, 'SIGKILL');
+        const childCmdline = readFileSync(
+          `/proc/${childPid}/comm`,
+          "utf-8",
+        ).trim();
+        if (childCmdline === "claude") {
+          process.kill(childPid, "SIGKILL");
         }
-      } catch { /* child already dead */ }
+      } catch {
+        /* child already dead */
+      }
     }
-  } catch { /* no children or pgrep failed */ }
+  } catch {
+    /* no children or pgrep failed */
+  }
 
-  try { process.kill(daemonPid, 'SIGTERM'); } catch { /* already dead */ }
+  try {
+    process.kill(daemonPid, "SIGTERM");
+  } catch {
+    /* already dead */
+  }
   setTimeout(() => {
     if (pidAlive(daemonPid)) {
-      try { process.kill(daemonPid, 'SIGKILL'); } catch { /* dead */ }
+      try {
+        process.kill(daemonPid, "SIGKILL");
+      } catch {
+        /* dead */
+      }
     }
-    try { unlinkSync(pidFile); } catch { /* ignore */ }
+    try {
+      unlinkSync(pidFile);
+    } catch {
+      /* ignore */
+    }
   }, 1000);
 }
 
@@ -1295,13 +1644,17 @@ function getDescendantPids(pid: number): number[] {
   while (queue.length > 0) {
     const parent = queue.shift()!;
     try {
-      const stdout = execFileSync('pgrep', ['-P', String(parent)], { encoding: 'utf8' });
-      const children = stdout.trim().split('\n').filter(Boolean).map(Number);
+      const stdout = execFileSync("pgrep", ["-P", String(parent)], {
+        encoding: "utf8",
+      });
+      const children = stdout.trim().split("\n").filter(Boolean).map(Number);
       for (const child of children) {
         descendants.push(child);
         queue.push(child);
       }
-    } catch { /* no children */ }
+    } catch {
+      /* no children */
+    }
   }
   return descendants.reverse();
 }
@@ -1310,14 +1663,30 @@ function killPidTree(pid: number): void {
   const descendants = getDescendantPids(pid);
   const allPids = [...descendants, pid];
   for (const p of allPids) {
-    try { process.kill(p, 'SIGTERM'); } catch { /* dead */ }
+    try {
+      process.kill(p, "SIGTERM");
+    } catch {
+      /* dead */
+    }
   }
-  try { process.kill(-pid, 'SIGTERM'); } catch { /* process group kill */ }
+  try {
+    process.kill(-pid, "SIGTERM");
+  } catch {
+    /* process group kill */
+  }
   setTimeout(() => {
     for (const p of allPids) {
-      try { process.kill(p, 'SIGKILL'); } catch { /* dead */ }
+      try {
+        process.kill(p, "SIGKILL");
+      } catch {
+        /* dead */
+      }
     }
-    try { process.kill(-pid, 'SIGKILL'); } catch { /* dead */ }
+    try {
+      process.kill(-pid, "SIGKILL");
+    } catch {
+      /* dead */
+    }
   }, 3000);
 }
 
@@ -1328,39 +1697,58 @@ export async function killSession(sessionId: string): Promise<boolean> {
   // 1. Notify all subscribers of termination
   for (const ws of active?.subscribers ?? []) {
     try {
-      ws.send(JSON.stringify({ type: 'exit', exitCode: -1 }));
-    } catch { /* ignore */ }
+      ws.send(JSON.stringify({ type: "exit", exitCode: -1 }));
+    } catch {
+      /* ignore */
+    }
   }
 
   // 2. Run SONA session-end hook before killing (consolidates learning data)
   try {
-    const sess = getDb().prepare('SELECT project_id FROM sessions WHERE id = ?').get(sessionId) as { project_id: string | null } | undefined;
+    const sess = getDb()
+      .prepare("SELECT project_id FROM sessions WHERE id = ?")
+      .get(sessionId) as { project_id: string | null } | undefined;
     if (sess?.project_id) {
-      const proj = getDb().prepare('SELECT path FROM projects WHERE id = ?').get(sess.project_id) as { path: string } | undefined;
-      const hookHandler = proj?.path ? join(proj.path, '.claude', 'helpers', 'hook-handler.cjs') : null;
+      const proj = getDb()
+        .prepare("SELECT path FROM projects WHERE id = ?")
+        .get(sess.project_id) as { path: string } | undefined;
+      const hookHandler = proj?.path
+        ? join(proj.path, ".claude", "helpers", "hook-handler.cjs")
+        : null;
       if (hookHandler && existsSync(hookHandler)) {
-        await execFileAsync('node', [hookHandler, 'session-end'], {
-          cwd: proj!.path, timeout: 5000,
-        }).catch(() => { /* non-fatal — don't block kill */ });
+        await execFileAsync("node", [hookHandler, "session-end"], {
+          cwd: proj!.path,
+          timeout: 5000,
+        }).catch(() => {
+          /* non-fatal — don't block kill */
+        });
       }
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   // 3. Delete pty_output immediately — no point keeping replay data for a killed session
   try {
-    getDb().prepare('DELETE FROM pty_output WHERE session_id = ?').run(sessionId);
-  } catch { /* ignore */ }
+    getDb()
+      .prepare("DELETE FROM pty_output WHERE session_id = ?")
+      .run(sessionId);
+  } catch {
+    /* ignore */
+  }
 
   // 4. Tell the worker to kill everything (non-blocking from our perspective)
   if (active) {
     try {
-      active.worker.send({ type: 'kill' });
-    } catch { /* worker may be dead */ }
+      active.worker.send({ type: "kill" });
+    } catch {
+      /* worker may be dead */
+    }
 
     // Give the worker 2s to clean up, then force-kill it
     setTimeout(() => {
       if (active.worker.connected) {
-        active.worker.kill('SIGKILL');
+        active.worker.kill("SIGKILL");
       }
     }, 2000);
 
@@ -1372,49 +1760,79 @@ export async function killSession(sessionId: string): Promise<boolean> {
   if (active?.externalSocket) {
     const sock = active.externalSocket;
     adoptedSockets.delete(sock);
-    execFileAsync('fuser', [sock]).then(({ stdout }) => {
-      const pids = stdout.trim().split(/\s+/).filter(Boolean).map(Number);
-      for (const pid of pids) {
-        try { process.kill(pid, 'SIGTERM'); } catch { /* dead */ }
-      }
-      setTimeout(() => {
+    execFileAsync("fuser", [sock])
+      .then(({ stdout }) => {
+        const pids = stdout.trim().split(/\s+/).filter(Boolean).map(Number);
         for (const pid of pids) {
-          try { process.kill(pid, 'SIGKILL'); } catch { /* dead */ }
+          try {
+            process.kill(pid, "SIGTERM");
+          } catch {
+            /* dead */
+          }
         }
-      }, 2000);
-    }).catch(() => { /* fuser failed */ });
+        setTimeout(() => {
+          for (const pid of pids) {
+            try {
+              process.kill(pid, "SIGKILL");
+            } catch {
+              /* dead */
+            }
+          }
+        }, 2000);
+      })
+      .catch(() => {
+        /* fuser failed */
+      });
   }
 
   // 6. Kill orphaned ruflo daemon for this session's project
   try {
-    const sess = getDb().prepare('SELECT project_id FROM sessions WHERE id = ?').get(sessionId) as { project_id: string | null } | undefined;
+    const sess = getDb()
+      .prepare("SELECT project_id FROM sessions WHERE id = ?")
+      .get(sessionId) as { project_id: string | null } | undefined;
     if (sess?.project_id) {
-      const proj = getDb().prepare('SELECT path FROM projects WHERE id = ?').get(sess.project_id) as { path: string } | undefined;
+      const proj = getDb()
+        .prepare("SELECT path FROM projects WHERE id = ?")
+        .get(sess.project_id) as { path: string } | undefined;
       if (proj?.path) {
         killOrphanedDaemon(proj.path);
       }
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   // 7. Fallback: kill by DB PID if no active session (e.g. server restarted)
   if (!active) {
     try {
-      const session = getDb().prepare('SELECT pid FROM sessions WHERE id = ?').get(sessionId) as { pid: number | null } | undefined;
+      const session = getDb()
+        .prepare("SELECT pid FROM sessions WHERE id = ?")
+        .get(sessionId) as { pid: number | null } | undefined;
       if (session?.pid && pidAlive(session.pid)) {
-        console.log(`  Killing orphaned PID ${session.pid} for session ${sessionId}`);
+        console.log(
+          `  Killing orphaned PID ${session.pid} for session ${sessionId}`,
+        );
         killPidTree(session.pid);
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   // 8. Update DB immediately
   const db = getDb();
-  const result = db.prepare(`
+  const result = db
+    .prepare(
+      `
     UPDATE sessions SET status = 'cancelled', completed_at = datetime('now'), updated_at = datetime('now')
     WHERE id = ? AND status IN ('running', 'pending', 'detached')
-  `).run(sessionId);
+  `,
+    )
+    .run(sessionId);
 
-  console.log(`[KILL] Session ${sessionId} killed (db_updated=${result.changes > 0})`);
+  console.log(
+    `[KILL] Session ${sessionId} killed (db_updated=${result.changes > 0})`,
+  );
   return !!active || result.changes > 0;
 }
 
@@ -1432,19 +1850,34 @@ export function releaseSession(sessionId: string): boolean {
   // Notify subscribers so the frontend closes the tab
   for (const ws of active.subscribers) {
     try {
-      ws.send(JSON.stringify({ type: 'exit', sessionId, exitCode: 0, reason: 'popped-out' }));
-    } catch { /* ignore */ }
+      ws.send(
+        JSON.stringify({
+          type: "exit",
+          sessionId,
+          exitCode: 0,
+          reason: "popped-out",
+        }),
+      );
+    } catch {
+      /* ignore */
+    }
   }
 
   // Release the worker (detach from the tmux/dtach session without killing it)
   // so the external terminal can attach to the still-running session.
   try {
     if (active.worker.connected) {
-      active.worker.send({ type: 'release' });
+      active.worker.send({ type: "release" });
     }
-  } catch { /* worker may be dead */ }
+  } catch {
+    /* worker may be dead */
+  }
   setTimeout(() => {
-    try { active.worker.kill('SIGKILL'); } catch { /* dead */ }
+    try {
+      active.worker.kill("SIGKILL");
+    } catch {
+      /* dead */
+    }
   }, 2000);
 
   // Remove from adopted tracking so it becomes discoverable again
@@ -1458,26 +1891,37 @@ export function releaseSession(sessionId: string): boolean {
 
   // Mark as released (still running externally, available for re-adoption)
   const db = getDb();
-  db.prepare(`
+  db.prepare(
+    `
     UPDATE sessions SET status = 'released', updated_at = datetime('now')
     WHERE id = ? AND status IN ('running', 'pending', 'detached')
-  `).run(sessionId);
+  `,
+  ).run(sessionId);
 
   return true;
 }
 
 export function getSession(id: string): Session | null {
   const db = getDb();
-  return (db.prepare('SELECT * FROM sessions WHERE id = ?').get(id) as Session) || null;
+  return (
+    (db.prepare("SELECT * FROM sessions WHERE id = ?").get(id) as Session) ||
+    null
+  );
 }
 
 export function listSessions(status?: string): Session[] {
   const db = getDb();
   if (status) {
-    return db.prepare('SELECT * FROM sessions WHERE status = ? ORDER BY created_at DESC').all(status) as Session[];
+    return db
+      .prepare(
+        "SELECT * FROM sessions WHERE status = ? ORDER BY created_at DESC",
+      )
+      .all(status) as Session[];
   }
   // Return ALL active sessions (never drop them) plus the 50 most recent inactive ones
-  return db.prepare(`
+  return db
+    .prepare(
+      `
     SELECT * FROM sessions WHERE status IN ('running', 'pending', 'launching')
     UNION ALL
     SELECT * FROM (
@@ -1485,7 +1929,9 @@ export function listSessions(status?: string): Session[] {
       ORDER BY created_at DESC LIMIT 50
     )
     ORDER BY created_at DESC
-  `).all() as Session[];
+  `,
+    )
+    .all() as Session[];
 }
 
 export function isSessionActive(sessionId: string): boolean {
@@ -1508,11 +1954,15 @@ export function getSessionSocketPath(sessionId: string): string | null {
   if (existsSync(sock)) return sock;
   // Fallback: check the session's persisted external_socket column
   try {
-    const row = getDb().prepare('SELECT external_socket FROM sessions WHERE id = ?').get(sessionId) as { external_socket: string | null } | undefined;
+    const row = getDb()
+      .prepare("SELECT external_socket FROM sessions WHERE id = ?")
+      .get(sessionId) as { external_socket: string | null } | undefined;
     if (row?.external_socket && existsSync(row.external_socket)) {
       return row.external_socket;
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return null;
 }
 
@@ -1525,9 +1975,13 @@ export function getSessionTmuxName(sessionId: string): string | null {
   const name = tmuxSessionName(sessionId);
   for (const server of [TMUX_SERVER, ...LEGACY_TMUX_SERVERS]) {
     try {
-      execFileSync('tmux', ['-L', server, 'has-session', '-t', name], { stdio: 'ignore' });
+      execFileSync("tmux", ["-L", server, "has-session", "-t", name], {
+        stdio: "ignore",
+      });
       return name;
-    } catch { /* try next */ }
+    } catch {
+      /* try next */
+    }
   }
   return null;
 }
@@ -1537,9 +1991,13 @@ export function getSessionTmuxServer(sessionId: string): string {
   const name = tmuxSessionName(sessionId);
   for (const server of [TMUX_SERVER, ...LEGACY_TMUX_SERVERS]) {
     try {
-      execFileSync('tmux', ['-L', server, 'has-session', '-t', name], { stdio: 'ignore' });
+      execFileSync("tmux", ["-L", server, "has-session", "-t", name], {
+        stdio: "ignore",
+      });
       return server;
-    } catch { /* try next */ }
+    } catch {
+      /* try next */
+    }
   }
   return TMUX_SERVER;
 }
@@ -1555,16 +2013,22 @@ export function killAllSessions(): void {
     // Kill the worker process only — leave tmux/dtach alive for reconnect.
     // Do NOT send { type: 'kill' } — that tells the worker to kill tmux too.
     try {
-      active.worker.kill('SIGKILL');
-    } catch { /* ignore */ }
+      active.worker.kill("SIGKILL");
+    } catch {
+      /* ignore */
+    }
 
     // Mark as detached so autoReconnectDetachedSessions picks them up on next startup
     try {
-      db.prepare(`
+      db.prepare(
+        `
         UPDATE sessions SET status = 'detached', updated_at = datetime('now')
         WHERE id = ? AND status IN ('running', 'pending')
-      `).run(id);
-    } catch { /* DB might already be closed */ }
+      `,
+      ).run(id);
+    } catch {
+      /* DB might already be closed */
+    }
 
     activeSessions.delete(id);
   }
@@ -1586,19 +2050,32 @@ export async function cleanupStaleRunningSessions(): Promise<void> {
   const db = getDb();
 
   if (config.useDtach || config.useTmux) {
-    const stale = db.prepare(`
+    const stale = db
+      .prepare(
+        `
       SELECT s.id, s.pid, p.path as project_path FROM sessions s
       LEFT JOIN projects p ON s.project_id = p.id
       WHERE s.status IN ('running', 'pending', 'detached')
       OR (s.status = 'failed' AND (s.completed_at IS NULL OR s.completed_at > datetime('now', '-1 hour')))
-    `).all() as { id: string; pid: number; project_path: string | null }[];
+    `,
+      )
+      .all() as { id: string; pid: number; project_path: string | null }[];
 
-    if (stale.length === 0) { tlog(`[CLEANUP] no stale sessions, done in ${Date.now() - t0}ms`); return; }
+    if (stale.length === 0) {
+      tlog(`[CLEANUP] no stale sessions, done in ${Date.now() - t0}ms`);
+      return;
+    }
 
     const t1 = Date.now();
-    const aliveDtach = config.useDtach ? new Set(dtachListOctoallySessions()) : new Set<string>();
-    const aliveTmux = config.useTmux ? new Set(tmuxListOctoallySessionIds()) : new Set<string>();
-    tlog(`[CLEANUP] session listing: ${Date.now() - t1}ms (${stale.length} stale, ${aliveTmux.size} tmux, ${aliveDtach.size} dtach)`);
+    const aliveDtach = config.useDtach
+      ? new Set(dtachListOctoallySessions())
+      : new Set<string>();
+    const aliveTmux = config.useTmux
+      ? new Set(tmuxListOctoallySessionIds())
+      : new Set<string>();
+    tlog(
+      `[CLEANUP] session listing: ${Date.now() - t1}ms (${stale.length} stale, ${aliveTmux.size} tmux, ${aliveDtach.size} dtach)`,
+    );
     let detached = 0;
     let cleaned = 0;
 
@@ -1607,51 +2084,83 @@ export async function cleanupStaleRunningSessions(): Promise<void> {
       const inDtach = aliveDtach.has(id);
       tlog(`[CLEANUP] session ${id}: tmux=${inTmux}, dtach=${inDtach}`);
       if (inTmux || inDtach) {
-        db.prepare(`
+        db.prepare(
+          `
           UPDATE sessions SET status = 'detached', updated_at = datetime('now')
           WHERE id = ?
-        `).run(id);
+        `,
+        ).run(id);
         detached++;
       } else {
         if (project_path) {
-          try { killOrphanedDaemon(project_path); } catch { /* ignore */ }
+          try {
+            killOrphanedDaemon(project_path);
+          } catch {
+            /* ignore */
+          }
         }
-        db.prepare(`
+        db.prepare(
+          `
           UPDATE sessions SET status = 'failed', exit_code = -1, completed_at = datetime('now'), updated_at = datetime('now')
           WHERE id = ?
-        `).run(id);
+        `,
+        ).run(id);
         cleaned++;
       }
     }
 
-    tlog(`[CLEANUP] done in ${Date.now() - t0}ms (${detached} detached, ${cleaned} cleaned)`);
-    if (detached > 0) console.log(`  Found ${detached} detached session(s) available for reconnect`);
-    if (cleaned > 0) console.log(`  Cleaned up ${cleaned} dead session(s) from previous run`);
+    tlog(
+      `[CLEANUP] done in ${Date.now() - t0}ms (${detached} detached, ${cleaned} cleaned)`,
+    );
+    if (detached > 0)
+      console.log(
+        `  Found ${detached} detached session(s) available for reconnect`,
+      );
+    if (cleaned > 0)
+      console.log(`  Cleaned up ${cleaned} dead session(s) from previous run`);
   } else {
-    const stale = db.prepare(`
+    const stale = db
+      .prepare(
+        `
       SELECT id, pid, claude_session_id, project_id, task FROM sessions WHERE status IN ('running', 'pending') AND pid IS NOT NULL
-    `).all() as { id: string; pid: number; claude_session_id: string | null; project_id: string | null; task: string }[];
+    `,
+      )
+      .all() as {
+      id: string;
+      pid: number;
+      claude_session_id: string | null;
+      project_id: string | null;
+      task: string;
+    }[];
 
     for (const { id, pid } of stale) {
       killOrphanedProcess(pid, id);
     }
 
-    const resumable = stale.filter(s => s.claude_session_id && s.project_id);
+    const resumable = stale.filter((s) => s.claude_session_id && s.project_id);
     const nonResumable = stale.length - resumable.length;
 
     if (nonResumable > 0) {
-      const updated = db.prepare(`
+      const updated = db
+        .prepare(
+          `
         UPDATE sessions SET status = 'failed', exit_code = -1, completed_at = datetime('now'), updated_at = datetime('now')
         WHERE status IN ('running', 'pending') AND (claude_session_id IS NULL OR project_id IS NULL)
-      `).run();
+      `,
+        )
+        .run();
       if (updated.changes > 0) {
-        console.log(`  Cleaned up ${updated.changes} stale session(s) from previous crash`);
+        console.log(
+          `  Cleaned up ${updated.changes} stale session(s) from previous crash`,
+        );
       }
     }
 
     // Circuit breaker: skip auto-resume if server is restart-looping
     if (isRestartStorm()) {
-      console.warn(`  [CIRCUIT BREAKER] Server restarted ${RESTART_STORM_THRESHOLD}+ times in ${RESTART_WINDOW_MS / 60000}min — skipping auto-resume of ${resumable.length} session(s) to prevent runaway spawning`);
+      console.warn(
+        `  [CIRCUIT BREAKER] Server restarted ${RESTART_STORM_THRESHOLD}+ times in ${RESTART_WINDOW_MS / 60000}min — skipping auto-resume of ${resumable.length} session(s) to prevent runaway spawning`,
+      );
       const markFailed = db.prepare(`
         UPDATE sessions SET status = 'failed', exit_code = -1, completed_at = datetime('now'), updated_at = datetime('now')
         WHERE id = ?
@@ -1661,31 +2170,40 @@ export async function cleanupStaleRunningSessions(): Promise<void> {
       for (const session of resumable) {
         // Session cap: don't resume if we'd exceed the limit
         if (isAtSessionLimit()) {
-          console.warn(`  [SESSION CAP] Already ${activeSessions.size} active sessions (max ${MAX_ACTIVE_SESSIONS}) — skipping resume of remaining sessions`);
+          console.warn(
+            `  [SESSION CAP] Already ${activeSessions.size} active sessions (max ${MAX_ACTIVE_SESSIONS}) — skipping resume of remaining sessions`,
+          );
           const markFailed = db.prepare(`
             UPDATE sessions SET status = 'failed', exit_code = -1, completed_at = datetime('now'), updated_at = datetime('now')
             WHERE id = ?
           `);
-          for (const s of resumable.slice(resumable.indexOf(session))) markFailed.run(s.id);
+          for (const s of resumable.slice(resumable.indexOf(session)))
+            markFailed.run(s.id);
           break;
         }
 
-        const project = db.prepare('SELECT path FROM projects WHERE id = ?').get(session.project_id!) as { path: string } | undefined;
+        const project = db
+          .prepare("SELECT path FROM projects WHERE id = ?")
+          .get(session.project_id!) as { path: string } | undefined;
         if (!project) {
-          db.prepare(`
+          db.prepare(
+            `
             UPDATE sessions SET status = 'failed', exit_code = -1, completed_at = datetime('now'), updated_at = datetime('now')
             WHERE id = ?
-          `).run(session.id);
+          `,
+          ).run(session.id);
           continue;
         }
         try {
           await resumeCrashedSession(session as Session, project.path);
         } catch (err) {
           console.error(`  Failed to resume session ${session.id}:`, err);
-          db.prepare(`
+          db.prepare(
+            `
             UPDATE sessions SET status = 'failed', exit_code = -1, completed_at = datetime('now'), updated_at = datetime('now')
             WHERE id = ?
-          `).run(session.id);
+          `,
+          ).run(session.id);
         }
       }
     }
@@ -1700,47 +2218,68 @@ export async function cleanupStaleRunningSessions(): Promise<void> {
   // Restore adoptedSockets from DB so adopted sessions aren't shown as
   // discoverable again after restart.
   try {
-    const adopted = db.prepare(`
+    const adopted = db
+      .prepare(
+        `
       SELECT external_socket FROM sessions
       WHERE external_socket IS NOT NULL
       AND status IN ('running', 'pending', 'detached')
-    `).all() as { external_socket: string }[];
+    `,
+      )
+      .all() as { external_socket: string }[];
     for (const row of adopted) {
       if (existsSync(row.external_socket)) {
         adoptedSockets.add(row.external_socket);
       }
     }
     if (adoptedSockets.size > 0) {
-      console.log(`  Restored ${adoptedSockets.size} adopted socket(s) from previous run`);
+      console.log(
+        `  Restored ${adoptedSockets.size} adopted socket(s) from previous run`,
+      );
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   // Purge pty_output for dead sessions — keeps DB lean on startup.
   // Detached sessions are preserved (they need replay data for reconnect).
   try {
-    const purged = db.prepare(`
+    const purged = db
+      .prepare(
+        `
       DELETE FROM pty_output WHERE session_id IN (
         SELECT id FROM sessions WHERE status IN ('completed', 'cancelled', 'failed')
       )
-    `).run();
+    `,
+      )
+      .run();
     if (purged.changes > 0) {
-      console.log(`  Purged ${purged.changes} pty_output row(s) from dead sessions`);
+      console.log(
+        `  Purged ${purged.changes} pty_output row(s) from dead sessions`,
+      );
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   // Reclaim disk space after purging — VACUUM rewrites the DB file without dead pages.
   try {
-    const before = (db.pragma('page_count') as { page_count: number }[])[0].page_count;
-    const freePages = (db.pragma('freelist_count') as { freelist_count: number }[])[0].freelist_count;
+    const before = (db.pragma("page_count") as { page_count: number }[])[0]
+      .page_count;
+    const freePages = (
+      db.pragma("freelist_count") as { freelist_count: number }[]
+    )[0].freelist_count;
     if (freePages > 100) {
-      db.exec('VACUUM');
-      const after = (db.pragma('page_count') as { page_count: number }[])[0].page_count;
-      const pageSize = (db.pragma('page_size') as { page_size: number }[])[0].page_size;
-      const savedMB = ((before - after) * pageSize / 1048576).toFixed(1);
+      db.exec("VACUUM");
+      const after = (db.pragma("page_count") as { page_count: number }[])[0]
+        .page_count;
+      const pageSize = (db.pragma("page_size") as { page_size: number }[])[0]
+        .page_size;
+      const savedMB = (((before - after) * pageSize) / 1048576).toFixed(1);
       console.log(`  VACUUM reclaimed ${savedMB}MB (${before - after} pages)`);
     }
   } catch (err) {
-    console.error('  VACUUM failed:', err);
+    console.error("  VACUUM failed:", err);
   }
 }
 
@@ -1751,22 +2290,36 @@ export async function cleanupStaleRunningSessions(): Promise<void> {
 export async function autoReconnectDetachedSessions(): Promise<void> {
   const t0 = Date.now();
   tlog(`[AUTO-RECONNECT] start`);
-  if (!config.useDtach && !config.useTmux) { tlog(`[AUTO-RECONNECT] skipped (no tmux/dtach)`); return; }
+  if (!config.useDtach && !config.useTmux) {
+    tlog(`[AUTO-RECONNECT] skipped (no tmux/dtach)`);
+    return;
+  }
 
   // Circuit breaker: skip if restart-looping
   if (isRestartStorm()) {
-    console.warn(`  [CIRCUIT BREAKER] Restart storm detected — skipping auto-reconnect to prevent runaway spawning`);
+    console.warn(
+      `  [CIRCUIT BREAKER] Restart storm detected — skipping auto-reconnect to prevent runaway spawning`,
+    );
     tlog(`[AUTO-RECONNECT] skipped (restart storm)`);
     return;
   }
 
   const db = getDb();
-  const detached = db.prepare(`
+  const detached = db
+    .prepare(
+      `
     SELECT id FROM sessions WHERE status = 'detached'
-  `).all() as { id: string }[];
+  `,
+    )
+    .all() as { id: string }[];
 
-  if (detached.length === 0) { tlog(`[AUTO-RECONNECT] no detached sessions`); return; }
-  tlog(`[AUTO-RECONNECT] reconnecting ${detached.length} sessions (batch size: ${RECONNECT_BATCH_SIZE})`);
+  if (detached.length === 0) {
+    tlog(`[AUTO-RECONNECT] no detached sessions`);
+    return;
+  }
+  tlog(
+    `[AUTO-RECONNECT] reconnecting ${detached.length} sessions (batch size: ${RECONNECT_BATCH_SIZE})`,
+  );
 
   _reconnecting = true;
   _reconnectTotal = detached.length;
@@ -1777,19 +2330,29 @@ export async function autoReconnectDetachedSessions(): Promise<void> {
   for (let i = 0; i < detached.length; i += RECONNECT_BATCH_SIZE) {
     // Check session cap before each batch
     if (isAtSessionLimit()) {
-      console.warn(`  [SESSION CAP] Hit ${MAX_ACTIVE_SESSIONS} active sessions — stopping auto-reconnect (${_reconnectDone}/${detached.length} done)`);
+      console.warn(
+        `  [SESSION CAP] Hit ${MAX_ACTIVE_SESSIONS} active sessions — stopping auto-reconnect (${_reconnectDone}/${detached.length} done)`,
+      );
       break;
     }
 
     const batch = detached.slice(i, i + RECONNECT_BATCH_SIZE);
     const results = await Promise.allSettled(
-      batch.map(({ id }) => reconnectSession(id).finally(() => { _reconnectDone++; }))
+      batch.map(({ id }) =>
+        reconnectSession(id).finally(() => {
+          _reconnectDone++;
+        }),
+      ),
     );
-    reconnected += results.filter(r => r.status === 'fulfilled' && r.value === true).length;
+    reconnected += results.filter(
+      (r) => r.status === "fulfilled" && r.value === true,
+    ).length;
   }
 
   _reconnecting = false;
-  tlog(`[AUTO-RECONNECT] done in ${Date.now() - t0}ms (${reconnected}/${detached.length} reconnected)`);
+  tlog(
+    `[AUTO-RECONNECT] done in ${Date.now() - t0}ms (${reconnected}/${detached.length} reconnected)`,
+  );
   if (reconnected > 0) {
     console.log(`  Auto-reconnected ${reconnected} detached session(s)`);
   }
@@ -1799,26 +2362,42 @@ export async function autoReconnectDetachedSessions(): Promise<void> {
  * Resume a crashed session by spawning a fresh ruflo process
  * and sending `/resume <uuid>` once it's ready for input.
  */
-async function resumeCrashedSession(staleSession: Session, projectPath: string): Promise<void> {
+async function resumeCrashedSession(
+  staleSession: Session,
+  projectPath: string,
+): Promise<void> {
   const db = getDb();
   const sessionId = staleSession.id;
   const claudeUuid = staleSession.claude_session_id!;
   const task = staleSession.task;
 
   // Per-session circuit breaker: don't resume sessions that keep crashing
-  const resumeCount = (db.prepare(`
+  const resumeCount =
+    (
+      db
+        .prepare(
+          `
     SELECT COUNT(*) as cnt FROM events WHERE session_id = ? AND type = 'session_resume'
-  `).get(sessionId) as { cnt: number })?.cnt || 0;
+  `,
+        )
+        .get(sessionId) as { cnt: number }
+    )?.cnt || 0;
   if (resumeCount >= MAX_SESSION_RESUMES) {
-    console.warn(`  [SESSION CIRCUIT BREAKER] Session ${sessionId} already resumed ${resumeCount} times — marking as failed to prevent crash loop`);
-    db.prepare(`
+    console.warn(
+      `  [SESSION CIRCUIT BREAKER] Session ${sessionId} already resumed ${resumeCount} times — marking as failed to prevent crash loop`,
+    );
+    db.prepare(
+      `
       UPDATE sessions SET status = 'failed', exit_code = -1, completed_at = datetime('now'), updated_at = datetime('now')
       WHERE id = ?
-    `).run(sessionId);
+    `,
+    ).run(sessionId);
     return;
   }
 
-  console.log(`  Resuming crashed session ${sessionId} (Claude session ${claudeUuid}, attempt ${resumeCount + 1}/${MAX_SESSION_RESUMES})`);
+  console.log(
+    `  Resuming crashed session ${sessionId} (Claude session ${claudeUuid}, attempt ${resumeCount + 1}/${MAX_SESSION_RESUMES})`,
+  );
 
   const preSpawnFiles = snapshotClaudeSessionFiles(projectPath);
   const worker = await forkWorker();
@@ -1827,31 +2406,33 @@ async function resumeCrashedSession(staleSession: Session, projectPath: string):
   const tracker = getOrCreateTracker(sessionId);
 
   // Update DB: mark as running again
-  db.prepare(`
+  db.prepare(
+    `
     UPDATE sessions SET status = 'running', claude_session_id = NULL, updated_at = datetime('now')
     WHERE id = ?
-  `).run(sessionId);
+  `,
+  ).run(sessionId);
 
   // Tell worker to spawn a hivemind session
   worker.send({
-    type: 'spawn',
+    type: "spawn",
     sessionId,
     projectPath,
     task,
-    mode: 'hivemind',
+    mode: "hivemind",
     cols: 120,
     rows: 40,
     useTmux: config.useTmux,
     useDtach: config.useDtach,
-    rufloCommand: getSetting('ruflo_command'),
+    rufloCommand: getSetting("ruflo_command"),
   });
 
   // One-shot listener: send /resume when the process is ready for input
   let resumeSent = false;
   const unsubscribe = tracker.onStateChange((state) => {
-    if (!resumeSent && state.processState === 'waiting_for_input') {
+    if (!resumeSent && state.processState === "waiting_for_input") {
       resumeSent = true;
-      active.worker.send({ type: 'input', data: `/resume ${claudeUuid}\n` });
+      active.worker.send({ type: "input", data: `/resume ${claudeUuid}\n` });
       console.log(`  Sent /resume ${claudeUuid} to session ${sessionId}`);
       unsubscribe();
     }
@@ -1859,11 +2440,13 @@ async function resumeCrashedSession(staleSession: Session, projectPath: string):
 
   insertEvent({
     session_id: sessionId,
-    type: 'session_resume',
+    type: "session_resume",
     data: { task, projectPath, claudeSessionId: claudeUuid },
   });
 
-  pushSystemEvent(`[OctoAlly] Session ${sessionId} resumed after crash: ${task.slice(0, 60)}`);
+  pushSystemEvent(
+    `[OctoAlly] Session ${sessionId} resumed after crash: ${task.slice(0, 60)}`,
+  );
 }
 
 /* ================================================================
@@ -1877,7 +2460,11 @@ let _reconnecting = false;
 let _reconnectTotal = 0;
 let _reconnectDone = 0;
 export function getReconnectStatus() {
-  return { reconnecting: _reconnecting, total: _reconnectTotal, done: _reconnectDone };
+  return {
+    reconnecting: _reconnecting,
+    total: _reconnectTotal,
+    done: _reconnectDone,
+  };
 }
 
 export interface DiscoverableSession {
@@ -1889,7 +2476,9 @@ export interface DiscoverableSession {
 
 async function fuserPidsAsync(sockPath: string): Promise<number[]> {
   try {
-    const { stdout } = await execFileAsync('fuser', [sockPath], { encoding: 'utf8' });
+    const { stdout } = await execFileAsync("fuser", [sockPath], {
+      encoding: "utf8",
+    });
     return stdout.trim().split(/\s+/).filter(Boolean).map(Number);
   } catch {
     return [];
@@ -1898,22 +2487,29 @@ async function fuserPidsAsync(sockPath: string): Promise<number[]> {
 
 async function isOctoAllyOwnedAsync(pid: number): Promise<boolean> {
   try {
-    const environ = await readFileAsync(`/proc/${pid}/environ`, 'utf8');
-    return environ.includes('OCTOALLY_SESSION=') || environ.includes('HIVECOMMAND_SESSION=') || environ.includes('OPENFLOW_SESSION=');
+    const environ = await readFileAsync(`/proc/${pid}/environ`, "utf8");
+    return (
+      environ.includes("OCTOALLY_SESSION=") ||
+      environ.includes("HIVECOMMAND_SESSION=") ||
+      environ.includes("OPENFLOW_SESSION=")
+    );
   } catch {
     return false;
   }
 }
 
-export async function discoverExternalSessions(projectPath?: string): Promise<DiscoverableSession[]> {
+export async function discoverExternalSessions(
+  projectPath?: string,
+): Promise<DiscoverableSession[]> {
   const results: DiscoverableSession[] = [];
   try {
-    const files = readdirSync('/tmp')
-      .filter(f => f.startsWith('hivemind-') && f.endsWith('.sock'));
+    const files = readdirSync("/tmp").filter(
+      (f) => f.startsWith("hivemind-") && f.endsWith(".sock"),
+    );
 
     for (const f of files) {
       const sockPath = `/tmp/${f}`;
-      const baseName = f.replace('.sock', '');
+      const baseName = f.replace(".sock", "");
       const infoPath = `/tmp/${baseName}.info`;
       const promptPath = `/tmp/${baseName}.prompt`;
 
@@ -1922,22 +2518,26 @@ export async function discoverExternalSessions(projectPath?: string): Promise<Di
       const hivePids = await fuserPidsAsync(sockPath);
       if (hivePids.length === 0) continue;
 
-      const ownerChecks = await Promise.all(hivePids.map(p => isOctoAllyOwnedAsync(p)));
-      if (ownerChecks.some(owned => owned)) continue;
+      const ownerChecks = await Promise.all(
+        hivePids.map((p) => isOctoAllyOwnedAsync(p)),
+      );
+      if (ownerChecks.some((owned) => owned)) continue;
 
-      let sessionProjectPath = '';
-      let startedAt = '';
-      let task = '';
+      let sessionProjectPath = "";
+      let startedAt = "";
+      let task = "";
       try {
-        const infoLines = readFileSync(infoPath, 'utf8').trim().split('\n');
-        sessionProjectPath = infoLines[0] || '';
-        startedAt = infoLines[1] || '';
-      } catch { continue; }
-
-      try {
-        task = readFileSync(promptPath, 'utf8').trim();
+        const infoLines = readFileSync(infoPath, "utf8").trim().split("\n");
+        sessionProjectPath = infoLines[0] || "";
+        startedAt = infoLines[1] || "";
       } catch {
-        task = '(unknown task)';
+        continue;
+      }
+
+      try {
+        task = readFileSync(promptPath, "utf8").trim();
+      } catch {
+        task = "(unknown task)";
       }
 
       if (projectPath && sessionProjectPath !== projectPath) continue;
@@ -1949,19 +2549,32 @@ export async function discoverExternalSessions(projectPath?: string): Promise<Di
         startedAt,
       });
     }
-  } catch { /* /tmp read failed */ }
+  } catch {
+    /* /tmp read failed */
+  }
 
   // Also discover released OctoAlly tmux sessions (popped-out sessions)
   // Collect socket paths already found by dtach scan to avoid duplicates
-  const foundSockets = new Set(results.map(r => r.socketPath));
+  const foundSockets = new Set(results.map((r) => r.socketPath));
   try {
     const db = getDb();
-    const releasedSessions = db.prepare(`
+    const releasedSessions = db
+      .prepare(
+        `
       SELECT s.id, s.task, s.created_at, s.project_id, s.external_socket, COALESCE(p.path, '') as project_path
       FROM sessions s
       LEFT JOIN projects p ON s.project_id = p.id
       WHERE s.status = 'released'
-    `).all() as Array<{ id: string; task: string; created_at: string; project_id: string; external_socket: string | null; project_path: string }>;
+    `,
+      )
+      .all() as Array<{
+      id: string;
+      task: string;
+      created_at: string;
+      project_id: string;
+      external_socket: string | null;
+      project_path: string;
+    }>;
 
     for (const s of releasedSessions) {
       // Skip if already tracked in activeSessions
@@ -1975,7 +2588,9 @@ export async function discoverExternalSessions(projectPath?: string): Promise<Di
       const tmuxAlive = await tmuxExistsAsync(s.id);
       if (!tmuxAlive) {
         // tmux session is gone — mark as failed
-        db.prepare(`UPDATE sessions SET status = 'failed', updated_at = datetime('now') WHERE id = ?`).run(s.id);
+        db.prepare(
+          `UPDATE sessions SET status = 'failed', updated_at = datetime('now') WHERE id = ?`,
+        ).run(s.id);
         continue;
       }
 
@@ -1988,15 +2603,20 @@ export async function discoverExternalSessions(projectPath?: string): Promise<Di
         startedAt: s.created_at,
       });
     }
-  } catch { /* db read failed */ }
+  } catch {
+    /* db read failed */
+  }
 
   return results;
 }
 
-export async function adoptDtachSession(socketPath: string, projectId?: string): Promise<Session | null> {
+export async function adoptDtachSession(
+  socketPath: string,
+  projectId?: string,
+): Promise<Session | null> {
   // Handle re-adoption of released OctoAlly tmux sessions
-  if (socketPath.startsWith('tmux:')) {
-    return readoptReleasedSession(socketPath.replace('tmux:', ''), projectId);
+  if (socketPath.startsWith("tmux:")) {
+    return readoptReleasedSession(socketPath.replace("tmux:", ""), projectId);
   }
 
   if (adoptedSockets.has(socketPath)) return null;
@@ -2005,36 +2625,40 @@ export async function adoptDtachSession(socketPath: string, projectId?: string):
   const socketPids = await fuserPidsAsync(socketPath);
   if (socketPids.length === 0) return null;
 
-  const ownerChecks = await Promise.all(socketPids.map(p => isOctoAllyOwnedAsync(p)));
-  if (ownerChecks.some(owned => owned)) return null;
+  const ownerChecks = await Promise.all(
+    socketPids.map((p) => isOctoAllyOwnedAsync(p)),
+  );
+  if (ownerChecks.some((owned) => owned)) return null;
 
   // Check if there's a released session that previously used this socket
   // (popped-out session being re-adopted). Reuse it instead of creating a duplicate.
   const db0 = getDb();
-  const releasedRow = db0.prepare(
-    `SELECT id FROM sessions WHERE external_socket = ? AND status = 'released' LIMIT 1`
-  ).get(socketPath) as { id: string } | undefined;
+  const releasedRow = db0
+    .prepare(
+      `SELECT id FROM sessions WHERE external_socket = ? AND status = 'released' LIMIT 1`,
+    )
+    .get(socketPath) as { id: string } | undefined;
   if (releasedRow) {
     const tmuxName = tmuxSessionName(releasedRow.id);
     return readoptReleasedSession(tmuxName, projectId);
   }
 
-  const baseName = socketPath.replace('.sock', '');
+  const baseName = socketPath.replace(".sock", "");
   const infoPath = `${baseName}.info`;
   const promptPath = `${baseName}.prompt`;
 
-  let projectPath = '';
-  let task = '';
+  let projectPath = "";
+  let task = "";
   try {
-    const infoLines = readFileSync(infoPath, 'utf8').trim().split('\n');
-    projectPath = infoLines[0] || '';
+    const infoLines = readFileSync(infoPath, "utf8").trim().split("\n");
+    projectPath = infoLines[0] || "";
   } catch {
     return null;
   }
   try {
-    task = readFileSync(promptPath, 'utf8').trim();
+    task = readFileSync(promptPath, "utf8").trim();
   } catch {
-    task = 'Adopted external session';
+    task = "Adopted external session";
   }
 
   const session = createSession(projectPath, task, projectId || undefined);
@@ -2045,48 +2669,73 @@ export async function adoptDtachSession(socketPath: string, projectId?: string):
   // This prevents resizing the external dtach process to wrong dimensions.
   adoptedSockets.add(socketPath);
   // Persist the external socket path on the session row so it survives restarts
-  db.prepare('UPDATE sessions SET external_socket = ? WHERE id = ?').run(socketPath, session.id);
+  db.prepare("UPDATE sessions SET external_socket = ? WHERE id = ?").run(
+    socketPath,
+    session.id,
+  );
 
   registerPendingSpawn(session.id, {
     projectPath,
     task,
-    mode: 'adopt',
+    mode: "adopt",
     projectId: projectId || undefined,
     socketPath,
   });
 
-  return db.prepare('SELECT * FROM sessions WHERE id = ?').get(session.id) as Session;
+  return db
+    .prepare("SELECT * FROM sessions WHERE id = ?")
+    .get(session.id) as Session;
 }
 
 /**
  * Re-adopt a released OctoAlly tmux session (popped-out and now being brought back).
  * Changes status from 'released' to 'detached' and reconnects via the existing reconnect path.
  */
-async function readoptReleasedSession(tmuxName: string, _projectId?: string): Promise<Session | null> {
+async function readoptReleasedSession(
+  tmuxName: string,
+  _projectId?: string,
+): Promise<Session | null> {
   // Extract session ID from tmux name (of-<id>)
-  const sessionId = tmuxName.replace(/^of-/, '');
+  const sessionId = tmuxName.replace(/^of-/, "");
   const db = getDb();
-  const session = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId) as Session | undefined;
-  if (!session || session.status !== 'released') return null;
+  const session = db
+    .prepare("SELECT * FROM sessions WHERE id = ?")
+    .get(sessionId) as Session | undefined;
+  if (!session || session.status !== "released") return null;
 
   // Verify tmux session is still alive (check all servers)
   const serverArgs = tmuxArgsForSession(sessionId);
   if (!(await tmuxExistsAsync(sessionId))) {
-    db.prepare(`UPDATE sessions SET status = 'failed', updated_at = datetime('now') WHERE id = ?`).run(sessionId);
+    db.prepare(
+      `UPDATE sessions SET status = 'failed', updated_at = datetime('now') WHERE id = ?`,
+    ).run(sessionId);
     return null;
   }
 
   // Detach all external clients (e.g. tilix) from the tmux session
   // so they don't fight with OctoAlly's worker for input/output
   try {
-    const { stdout } = await execFileAsync('tmux', [...serverArgs, 'list-clients', '-t', tmuxName, '-F', '#{client_tty}'], { encoding: 'utf8' });
-    const ttys = stdout.trim().split('\n').filter(Boolean);
+    const { stdout } = await execFileAsync(
+      "tmux",
+      [...serverArgs, "list-clients", "-t", tmuxName, "-F", "#{client_tty}"],
+      { encoding: "utf8" },
+    );
+    const ttys = stdout.trim().split("\n").filter(Boolean);
     for (const tty of ttys) {
       try {
-        await execFileAsync('tmux', [...serverArgs, 'detach-client', '-t', tty]);
-      } catch { /* client may have already disconnected */ }
+        await execFileAsync("tmux", [
+          ...serverArgs,
+          "detach-client",
+          "-t",
+          tty,
+        ]);
+      } catch {
+        /* client may have already disconnected */
+      }
     }
-  } catch { /* no clients attached */ }
+  } catch {
+    /* no clients attached */
+  }
 
   // Resize tmux window back to the dashboard width before reconnecting.
   // The external terminal may have resized tmux to a different width, but our
@@ -2095,14 +2744,32 @@ async function readoptReleasedSession(tmuxName: string, _projectId?: string): Pr
   // This ensures capture-pane grabs content at the correct dashboard width.
   const dashboardCols = session.terminal_cols || 120;
   try {
-    await execFileAsync('tmux', [...serverArgs, 'resize-window', '-t', tmuxName, '-x', String(dashboardCols)]);
+    await execFileAsync("tmux", [
+      ...serverArgs,
+      "resize-window",
+      "-t",
+      tmuxName,
+      "-x",
+      String(dashboardCols),
+    ]);
     // Unset window-size=manual that resize-window implicitly sets.
     // Without this, future clients (e.g. Tilix on next pop-out) can't resize the window.
-    await execFileAsync('tmux', [...serverArgs, 'set-option', '-t', tmuxName, '-u', 'window-size']);
-  } catch { /* ignore */ }
+    await execFileAsync("tmux", [
+      ...serverArgs,
+      "set-option",
+      "-t",
+      tmuxName,
+      "-u",
+      "window-size",
+    ]);
+  } catch {
+    /* ignore */
+  }
 
   // Mark as detached so reconnectSession() can pick it up
-  db.prepare(`UPDATE sessions SET status = 'detached', updated_at = datetime('now') WHERE id = ?`).run(sessionId);
+  db.prepare(
+    `UPDATE sessions SET status = 'detached', updated_at = datetime('now') WHERE id = ?`,
+  ).run(sessionId);
 
   // Skip pipe-pane replay: the stored data is stale (from before pop-out).
   // Commands run in the external terminal aren't captured by pipe-pane (worker was dead).
@@ -2110,34 +2777,56 @@ async function readoptReleasedSession(tmuxName: string, _projectId?: string): Pr
   const ok = await reconnectSession(sessionId, { skipPipePaneReplay: true });
   if (!ok) return null;
 
-  return db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId) as Session;
+  return db
+    .prepare("SELECT * FROM sessions WHERE id = ?")
+    .get(sessionId) as Session;
 }
 
 /**
  * Actually spawn the adopt worker — called when the browser sends its real dimensions.
  */
-export async function spawnAdopt(sessionId: string, socketPath: string, projectPath: string, task: string, cols: number, rows: number): Promise<void> {
+export async function spawnAdopt(
+  sessionId: string,
+  socketPath: string,
+  projectPath: string,
+  task: string,
+  cols: number,
+  rows: number,
+): Promise<void> {
   // Detach all existing dtach -a clients for this socket BEFORE we attach.
   // This disconnects the user's real terminal so it doesn't fight with OctoAlly.
   // We use pkill to SIGHUP dtach clients matching the socket path.
   // SIGHUP on a dtach client causes a clean detach (the master stays alive).
   try {
     // Find dtach -a processes for this specific socket path
-    const { stdout: psOut } = await execFileAsync('ps', ['aux'], { encoding: 'utf8' });
-    for (const line of psOut.split('\n')) {
-      if (!line.includes('dtach') || !line.includes('-a') || !line.includes(socketPath)) continue;
+    const { stdout: psOut } = await execFileAsync("ps", ["aux"], {
+      encoding: "utf8",
+    });
+    for (const line of psOut.split("\n")) {
+      if (
+        !line.includes("dtach") ||
+        !line.includes("-a") ||
+        !line.includes(socketPath)
+      )
+        continue;
       // Don't match grep/ps itself
-      if (line.includes('ps aux')) continue;
+      if (line.includes("ps aux")) continue;
       const parts = line.trim().split(/\s+/);
       if (parts.length < 2) continue;
       const pid = parseInt(parts[1], 10);
       if (pid > 0) {
-        console.log(`[ADOPT] Detaching existing dtach client PID ${pid} for ${socketPath}`);
-        try { process.kill(pid, 'SIGHUP'); } catch { /* already dead */ }
+        console.log(
+          `[ADOPT] Detaching existing dtach client PID ${pid} for ${socketPath}`,
+        );
+        try {
+          process.kill(pid, "SIGHUP");
+        } catch {
+          /* already dead */
+        }
       }
     }
   } catch (err) {
-    console.warn('[ADOPT] Failed to detach existing clients:', err);
+    console.warn("[ADOPT] Failed to detach existing clients:", err);
   }
 
   const worker = await forkWorker();
@@ -2147,7 +2836,7 @@ export async function spawnAdopt(sessionId: string, socketPath: string, projectP
   active.cols = cols;
 
   worker.send({
-    type: 'adopt',
+    type: "adopt",
     sessionId,
     socketPath,
     projectPath,
@@ -2158,11 +2847,18 @@ export async function spawnAdopt(sessionId: string, socketPath: string, projectP
 
   insertEvent({
     session_id: sessionId,
-    type: 'session_adopt',
-    data: { task, projectPath, externalSocket: socketPath, tmux: config.useTmux },
+    type: "session_adopt",
+    data: {
+      task,
+      projectPath,
+      externalSocket: socketPath,
+      tmux: config.useTmux,
+    },
   });
 
-  pushSystemEvent(`[OctoAlly] Adopted external session ${sessionId}: ${task.slice(0, 60)}`);
+  pushSystemEvent(
+    `[OctoAlly] Adopted external session ${sessionId}: ${task.slice(0, 60)}`,
+  );
 }
 
 function killOrphanedProcess(pid: number, sessionId: string): void {

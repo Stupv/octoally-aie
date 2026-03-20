@@ -1,9 +1,17 @@
-import { FastifyPluginAsync } from 'fastify';
+import { FastifyPluginAsync } from "fastify";
 import {
-  attachTerminal, writeToSession, resizeSession, reconnectSession,
-  getPendingSpawn, consumePendingSpawn, spawnClaudeFlow, spawnTerminal, spawnAdopt, spawnAgent,
-} from '../services/session-manager.js';
-import { getDb } from '../db/index.js';
+  attachTerminal,
+  writeToSession,
+  resizeSession,
+  reconnectSession,
+  getPendingSpawn,
+  consumePendingSpawn,
+  spawnClaudeFlow,
+  spawnTerminal,
+  spawnAdopt,
+  spawnAgent,
+} from "../services/session-manager.js";
+import { getDb } from "../db/index.js";
 
 /**
  * Terminal WebSocket route
@@ -17,10 +25,10 @@ export const terminalRoutes: FastifyPluginAsync = async (app) => {
   app.get<{
     Params: { sessionId: string };
     Querystring: { passive?: string; attempt?: string };
-  }>('/terminal/:sessionId', { websocket: true }, (socket, req) => {
+  }>("/terminal/:sessionId", { websocket: true }, (socket, req) => {
     const { sessionId } = req.params;
-    const isPassive = req.query.passive === '1';
-    const attempt = req.query.attempt || '?';
+    const isPassive = req.query.passive === "1";
+    const attempt = req.query.attempt || "?";
 
     // Check if this is a pending session that needs to be spawned.
     // Use getPendingSpawn (peek) instead of consume — React StrictMode
@@ -32,42 +40,79 @@ export const terminalRoutes: FastifyPluginAsync = async (app) => {
 
       // If this WebSocket closes before spawning, do nothing — the pending
       // spawn stays in the map for the next connection to pick up.
-      socket.on('close', () => {
+      socket.on("close", () => {
         // nothing to clean up if not yet spawned
       });
 
-      socket.on('message', async (raw: Buffer | string) => {
+      socket.on("message", async (raw: Buffer | string) => {
         try {
           const msg = JSON.parse(raw.toString());
 
-          if (!spawned && msg.type === 'resize') {
+          if (!spawned && msg.type === "resize") {
             // Now consume — this connection will own the spawn
             const info = consumePendingSpawn(sessionId);
             if (!info) {
               // Another connection beat us — try normal attach
               const attached = attachTerminal(sessionId, socket);
-              if (attached) { spawned = true; }
+              if (attached) {
+                spawned = true;
+              }
               return;
             }
 
             spawned = true;
             try {
-              if (info.mode === 'adopt' && info.socketPath) {
-                await spawnAdopt(sessionId, info.socketPath, info.projectPath, info.task, msg.cols, msg.rows);
-              } else if (info.mode === 'terminal') {
-                await spawnTerminal(sessionId, info.projectPath, msg.cols, msg.rows);
-              } else if (info.mode === 'agent' && info.agentType) {
-                await spawnAgent(sessionId, info.projectPath, info.task, info.agentType, msg.cols, msg.rows);
+              if (info.mode === "adopt" && info.socketPath) {
+                await spawnAdopt(
+                  sessionId,
+                  info.socketPath,
+                  info.projectPath,
+                  info.task,
+                  msg.cols,
+                  msg.rows,
+                );
+              } else if (info.mode === "terminal") {
+                await spawnTerminal(
+                  sessionId,
+                  info.projectPath,
+                  msg.cols,
+                  msg.rows,
+                );
+              } else if (info.mode === "agent" && info.agentType) {
+                await spawnAgent(
+                  sessionId,
+                  info.projectPath,
+                  info.task,
+                  info.agentType,
+                  msg.cols,
+                  msg.rows,
+                );
               } else {
-                await spawnClaudeFlow(sessionId, info.projectPath, info.task, msg.cols, msg.rows);
+                await spawnClaudeFlow(
+                  sessionId,
+                  info.projectPath,
+                  info.task,
+                  msg.cols,
+                  msg.rows,
+                );
               }
               const attached = attachTerminal(sessionId, socket);
               if (!attached) {
-                socket.send(JSON.stringify({ type: 'error', message: 'Failed to attach after spawn' }));
+                socket.send(
+                  JSON.stringify({
+                    type: "error",
+                    message: "Failed to attach after spawn",
+                  }),
+                );
                 socket.close();
               }
             } catch (err: any) {
-              socket.send(JSON.stringify({ type: 'error', message: `Spawn failed: ${err.message}` }));
+              socket.send(
+                JSON.stringify({
+                  type: "error",
+                  message: `Spawn failed: ${err.message}`,
+                }),
+              );
               socket.close();
             }
             return;
@@ -75,10 +120,10 @@ export const terminalRoutes: FastifyPluginAsync = async (app) => {
 
           if (spawned) {
             switch (msg.type) {
-              case 'input':
+              case "input":
                 writeToSession(sessionId, msg.data, msg.paste);
                 break;
-              case 'resize':
+              case "resize":
                 resizeSession(sessionId, msg.cols, msg.rows);
                 break;
             }
@@ -88,7 +133,7 @@ export const terminalRoutes: FastifyPluginAsync = async (app) => {
         }
       });
 
-      socket.send(JSON.stringify({ type: 'connected', sessionId }));
+      socket.send(JSON.stringify({ type: "connected", sessionId }));
       return;
     }
 
@@ -113,22 +158,34 @@ export const terminalRoutes: FastifyPluginAsync = async (app) => {
         }
         if (!attached) {
           // Mark dead sessions as failed so they stop appearing in the grid
-          getDb().prepare(`
+          getDb()
+            .prepare(
+              `
             UPDATE sessions SET status = 'failed', completed_at = datetime('now'), updated_at = datetime('now')
             WHERE id = ? AND status IN ('running', 'detached')
-          `).run(sessionId);
-          socket.send(JSON.stringify({ type: 'error', message: 'Session not found or not running' }));
+          `,
+            )
+            .run(sessionId);
+          socket.send(
+            JSON.stringify({
+              type: "error",
+              message: "Session not found or not running",
+            }),
+          );
           socket.close();
           return;
         }
         // Passive terminals only forward input, never resize
-        socket.on('message', (raw: Buffer | string) => {
+        socket.on("message", (raw: Buffer | string) => {
           try {
             const msg = JSON.parse(raw.toString());
-            if (msg.type === 'input') writeToSession(sessionId, msg.data, msg.paste);
-          } catch { /* ignore */ }
+            if (msg.type === "input")
+              writeToSession(sessionId, msg.data, msg.paste);
+          } catch {
+            /* ignore */
+          }
         });
-        socket.send(JSON.stringify({ type: 'connected', sessionId }));
+        socket.send(JSON.stringify({ type: "connected", sessionId }));
         return;
       }
 
@@ -139,26 +196,35 @@ export const terminalRoutes: FastifyPluginAsync = async (app) => {
         attached = attachTerminal(sessionId, socket);
       }
       if (!attached) {
-        getDb().prepare(`
+        getDb()
+          .prepare(
+            `
           UPDATE sessions SET status = 'failed', completed_at = datetime('now'), updated_at = datetime('now')
           WHERE id = ? AND status IN ('running', 'detached')
-        `).run(sessionId);
-        socket.send(JSON.stringify({ type: 'error', message: 'Session not found or not running' }));
+        `,
+          )
+          .run(sessionId);
+        socket.send(
+          JSON.stringify({
+            type: "error",
+            message: "Session not found or not running",
+          }),
+        );
         socket.close();
         return;
       }
 
       // Handle incoming messages from the browser terminal
-      socket.on('message', (raw: Buffer | string) => {
+      socket.on("message", (raw: Buffer | string) => {
         try {
           const msg = JSON.parse(raw.toString());
 
           switch (msg.type) {
-            case 'input':
+            case "input":
               writeToSession(sessionId, msg.data, msg.paste);
               break;
 
-            case 'resize':
+            case "resize":
               resizeSession(sessionId, msg.cols, msg.rows);
               break;
           }
@@ -167,13 +233,17 @@ export const terminalRoutes: FastifyPluginAsync = async (app) => {
         }
       });
 
-      socket.send(JSON.stringify({ type: 'connected', sessionId }));
+      socket.send(JSON.stringify({ type: "connected", sessionId }));
     })().catch((err) => {
       console.error(`[WS] Error in terminal handler for ${sessionId}:`, err);
       try {
-        socket.send(JSON.stringify({ type: 'error', message: 'Internal error' }));
+        socket.send(
+          JSON.stringify({ type: "error", message: "Internal error" }),
+        );
         socket.close();
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     });
   });
 };

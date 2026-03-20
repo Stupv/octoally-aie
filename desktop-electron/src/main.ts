@@ -1,9 +1,22 @@
-import { app, BrowserWindow, Menu, shell, ipcMain, session, globalShortcut } from 'electron';
-import * as path from 'path';
-import * as http from 'http';
-import { resolveCliPath, isServerReachable, startServer, waitForServer } from './server-manager';
-import { createTray } from './tray';
-import { registerSpeechHandlers } from './speech';
+import {
+  app,
+  BrowserWindow,
+  Menu,
+  shell,
+  ipcMain,
+  session,
+  globalShortcut,
+} from "electron";
+import * as path from "path";
+import * as http from "http";
+import {
+  resolveCliPath,
+  isServerReachable,
+  startServer,
+  waitForServer,
+} from "./server-manager";
+import { createTray } from "./tray";
+import { registerSpeechHandlers } from "./speech";
 
 let mainWindow: BrowserWindow | null = null;
 const cliPath = resolveCliPath();
@@ -17,10 +30,10 @@ function createWindow() {
     height: 900,
     minWidth: 800,
     minHeight: 600,
-    title: 'OctoAlly',
-    icon: path.join(__dirname, '..', 'icons', '128x128.png'),
+    title: "OctoAlly",
+    icon: path.join(__dirname, "..", "icons", "128x128.png"),
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, "preload.js"),
       // Security: disable nodeIntegration, enable context isolation
       nodeIntegration: false,
       contextIsolation: true,
@@ -33,21 +46,21 @@ function createWindow() {
   // then set .location.href on the child window. We intercept the child
   // window's navigation to catch the actual URL and open it externally.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('http://localhost:42010')) {
-      return { action: 'allow' };
+    if (url.startsWith("http://localhost:42010")) {
+      return { action: "allow" };
     }
     // about:blank = xterm.js/Claude Code link pattern — allow window creation
     // so we can intercept the subsequent .location.href navigation
-    if (!url || url === 'about:blank') {
-      return { action: 'allow' };
+    if (!url || url === "about:blank") {
+      return { action: "allow" };
     }
     shell.openExternal(url);
-    return { action: 'deny' };
+    return { action: "deny" };
   });
 
   // Watch for child windows created by window.open('about:blank') — when they
   // navigate to the real URL, open it externally and close the child window
-  mainWindow.webContents.on('did-create-window', (childWindow) => {
+  mainWindow.webContents.on("did-create-window", (childWindow) => {
     let handled = false;
     const openAndClose = (url: string) => {
       if (handled) return;
@@ -55,22 +68,30 @@ function createWindow() {
       shell.openExternal(url);
       setImmediate(() => childWindow.close());
     };
-    childWindow.webContents.on('will-navigate', (event, url) => {
-      if (url && url !== 'about:blank' && (url.startsWith('http://') || url.startsWith('https://'))) {
+    childWindow.webContents.on("will-navigate", (event, url) => {
+      if (
+        url &&
+        url !== "about:blank" &&
+        (url.startsWith("http://") || url.startsWith("https://"))
+      ) {
         event.preventDefault();
         openAndClose(url);
       }
     });
-    childWindow.webContents.on('did-start-navigation', (_event, url) => {
-      if (url && url !== 'about:blank' && (url.startsWith('http://') || url.startsWith('https://'))) {
+    childWindow.webContents.on("did-start-navigation", (_event, url) => {
+      if (
+        url &&
+        url !== "about:blank" &&
+        (url.startsWith("http://") || url.startsWith("https://"))
+      ) {
         openAndClose(url);
       }
     });
   });
 
   // Intercept navigation to external URLs in the main window
-  mainWindow.webContents.on('will-navigate', (event, url) => {
-    if (!url.startsWith('http://localhost:42010')) {
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    if (!url.startsWith("http://localhost:42010")) {
       event.preventDefault();
       shell.openExternal(url);
     }
@@ -78,37 +99,49 @@ function createWindow() {
 
   // In dev mode, load from Vite dev server; in production, load from the server
   const isDev = !!process.env.ELECTRON_ENABLE_LOGGING;
-  mainWindow.loadURL(isDev ? 'http://localhost:42011' : 'http://localhost:42010');
+  mainWindow.loadURL(
+    isDev ? "http://localhost:42011" : "http://localhost:42010",
+  );
 
   // Recover from renderer crashes — reload the page instead of showing a blank window
-  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+  mainWindow.webContents.on("render-process-gone", (_event, details) => {
     console.error(`[OctoAlly] Renderer process gone: ${details.reason}`);
-    if (details.reason !== 'clean-exit') {
+    if (details.reason !== "clean-exit") {
       setTimeout(() => mainWindow?.webContents.reload(), 500);
     }
   });
 
-  mainWindow.webContents.on('unresponsive', () => {
-    console.warn('[OctoAlly] Window became unresponsive, reloading...');
+  mainWindow.webContents.on("unresponsive", () => {
+    console.warn("[OctoAlly] Window became unresponsive, reloading...");
     setTimeout(() => mainWindow?.webContents.reload(), 1000);
   });
 
   // Keyboard shortcuts (menu bar is hidden)
-  mainWindow.webContents.on('before-input-event', (event, input) => {
+  mainWindow.webContents.on("before-input-event", (event, input) => {
     // F12 / Ctrl+Shift+I (Linux/Win) / Cmd+Opt+I (macOS): DevTools
-    if (input.key === 'F12' || ((input.control || input.meta) && input.shift && input.key === 'I') || (input.meta && input.alt && input.key === 'I')) {
+    if (
+      input.key === "F12" ||
+      ((input.control || input.meta) && input.shift && input.key === "I") ||
+      (input.meta && input.alt && input.key === "I")
+    ) {
       mainWindow?.webContents.toggleDevTools();
     }
     // F5 / Cmd+R (macOS): refresh
-    if (input.type === 'keyDown' && (
-      (input.key === 'F5' && !input.control && !input.shift) ||
-      (input.meta && !input.shift && input.key.toLowerCase() === 'r')
-    )) {
+    if (
+      input.type === "keyDown" &&
+      ((input.key === "F5" && !input.control && !input.shift) ||
+        (input.meta && !input.shift && input.key.toLowerCase() === "r"))
+    ) {
       event.preventDefault();
       mainWindow?.webContents.reload();
     }
     // Ctrl+Shift+R (Linux/Win) / Cmd+Shift+R (macOS): hard refresh (bypass cache)
-    if (input.key.toLowerCase() === 'r' && (input.control || input.meta) && input.shift && input.type === 'keyDown') {
+    if (
+      input.key.toLowerCase() === "r" &&
+      (input.control || input.meta) &&
+      input.shift &&
+      input.type === "keyDown"
+    ) {
       event.preventDefault();
       mainWindow?.webContents.reloadIgnoringCache();
     }
@@ -117,10 +150,11 @@ function createWindow() {
     // and navigator.clipboard.readText() rejects without a real user gesture.
     // webContents.paste() fires a proper ClipboardEvent on the focused element.
     // Linux: Ctrl+Shift+V, macOS: Cmd+V
-    const isPaste = input.type === 'keyDown' && input.key.toLowerCase() === 'v' && (
-      (input.control && input.shift) ||  // Linux: Ctrl+Shift+V
-      (input.meta && !input.shift)       // macOS: Cmd+V
-    );
+    const isPaste =
+      input.type === "keyDown" &&
+      input.key.toLowerCase() === "v" &&
+      ((input.control && input.shift) || // Linux: Ctrl+Shift+V
+        (input.meta && !input.shift)); // macOS: Cmd+V
     if (isPaste) {
       event.preventDefault();
       mainWindow?.webContents.paste();
@@ -130,7 +164,7 @@ function createWindow() {
   // Close-to-tray: hide window instead of quitting.
   // When actually quitting (tray → Quit, or app.exit), force-kill after 2s
   // if the renderer is unresponsive (e.g. server is dead, webview stuck).
-  mainWindow.on('close', (event) => {
+  mainWindow.on("close", (event) => {
     if (!(app as any).isQuitting) {
       event.preventDefault();
       mainWindow?.hide();
@@ -150,16 +184,20 @@ function showWindow() {
 
 // Extend app with custom property for quit tracking
 (app as any).isQuitting = false;
-app.on('before-quit', () => {
+app.on("before-quit", () => {
   (app as any).isQuitting = true;
 });
 
 app.whenReady().then(async () => {
   // Register IPC handlers
-  ipcMain.handle('get-version', () => app.getVersion());
-  ipcMain.handle('app-quit', () => app.exit(0));
-  ipcMain.handle('open-external', (_event, url: string) => {
-    if (url && typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'))) {
+  ipcMain.handle("get-version", () => app.getVersion());
+  ipcMain.handle("app-quit", () => app.exit(0));
+  ipcMain.handle("open-external", (_event, url: string) => {
+    if (
+      url &&
+      typeof url === "string" &&
+      (url.startsWith("http://") || url.startsWith("https://"))
+    ) {
       shell.openExternal(url);
     }
   });
@@ -168,28 +206,30 @@ app.whenReady().then(async () => {
   // Start server if port 42010 is not reachable (regardless of PID file state)
   let reachable = await isServerReachable();
   if (!reachable) {
-    console.log('[OctoAlly] Server not reachable, starting...');
+    console.log("[OctoAlly] Server not reachable, starting...");
     const started = await startServer(cliPath);
     if (started) {
-      console.log('[OctoAlly] Server started, waiting for it to become reachable...');
+      console.log(
+        "[OctoAlly] Server started, waiting for it to become reachable...",
+      );
       reachable = await waitForServer();
       if (reachable) {
-        console.log('[OctoAlly] Server is now reachable');
+        console.log("[OctoAlly] Server is now reachable");
       } else {
-        console.warn('[OctoAlly] Server started but not reachable after 10s');
+        console.warn("[OctoAlly] Server started but not reachable after 10s");
       }
     } else {
-      console.warn('[OctoAlly] Failed to start server');
+      console.warn("[OctoAlly] Failed to start server");
     }
   } else {
-    console.log('[OctoAlly] Server already reachable on port 42010');
+    console.log("[OctoAlly] Server already reachable on port 42010");
   }
 
   createWindow();
   createTray({ cliPath, showWindow });
 
   // Grant permissions for webview sessions (WebAuthn, notifications, etc.)
-  const webpageSession = session.fromPartition('persist:webpages');
+  const webpageSession = session.fromPartition("persist:webpages");
   webpageSession.setPermissionRequestHandler((_wc, _permission, callback) => {
     callback(true); // Be permissive — this is the user's chosen page
   });
@@ -198,8 +238,8 @@ app.whenReady().then(async () => {
   // Strip "Electron" and app name from webview session User-Agent.
   const defaultUA = webpageSession.getUserAgent();
   const cleanUA = defaultUA
-    .replace(/\s*Electron\/\S+/g, '')
-    .replace(/\s*octoally-desktop\/\S+/g, '');
+    .replace(/\s*Electron\/\S+/g, "")
+    .replace(/\s*octoally-desktop\/\S+/g, "");
   webpageSession.setUserAgent(cleanUA);
 
   // OAuth flow: Google blocks ALL embedded browsers (Electron BrowserWindow, webview,
@@ -212,33 +252,35 @@ app.whenReady().then(async () => {
   // the tokens back. We then inject the tokens into the webview's Supabase session.
 
   // Webview setup: intercept OAuth navigations, open in system browser
-  app.on('web-contents-created', (_event, contents) => {
-    if (contents.getType() === 'webview') {
+  app.on("web-contents-created", (_event, contents) => {
+    if (contents.getType() === "webview") {
       // Set dark background to prevent white flash during SPA page transitions.
       contents.setBackgroundThrottling(false);
-      contents.on('dom-ready', () => {
+      contents.on("dom-ready", () => {
         try {
-          contents.setBackgroundColor('#0f1117');
+          contents.setBackgroundColor("#0f1117");
         } catch {}
       });
 
       // Handle window.open() — navigate the webview instead of opening a popup
       contents.setWindowOpenHandler(({ url }) => {
         contents.loadURL(url);
-        return { action: 'deny' };
+        return { action: "deny" };
       });
 
       // Intercept OAuth navigation: open in system browser with token bridge
-      contents.on('will-navigate', (event, url) => {
-        if (url.includes('/auth/v1/authorize')) {
+      contents.on("will-navigate", (event, url) => {
+        if (url.includes("/auth/v1/authorize")) {
           event.preventDefault();
-          console.log('[WebView Auth] Intercepted OAuth, opening in system browser...');
+          console.log(
+            "[WebView Auth] Intercepted OAuth, opening in system browser...",
+          );
 
-          let appOrigin = '';
-          let originalRedirectTo = '';
+          let appOrigin = "";
+          let originalRedirectTo = "";
           try {
             const parsed = new URL(url);
-            const redirectTo = parsed.searchParams.get('redirect_to') || '';
+            const redirectTo = parsed.searchParams.get("redirect_to") || "";
             if (redirectTo) {
               originalRedirectTo = redirectTo;
               appOrigin = new URL(redirectTo).origin;
@@ -248,19 +290,19 @@ app.whenReady().then(async () => {
           // Start a temporary HTTP server to catch the OAuth callback tokens
           const tokenServer = http.createServer((req, res) => {
             // CORS headers for the POST from our own page
-            res.setHeader('Access-Control-Allow-Origin', '*');
-            res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-            res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+            res.setHeader("Access-Control-Allow-Origin", "*");
+            res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+            res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-            if (req.method === 'OPTIONS') {
+            if (req.method === "OPTIONS") {
               res.writeHead(204);
               res.end();
               return;
             }
 
-            if (req.url === '/auth-callback') {
+            if (req.url === "/auth-callback") {
               // Serve a page that extracts tokens from the hash and sends them back
-              res.writeHead(200, { 'Content-Type': 'text/html' });
+              res.writeHead(200, { "Content-Type": "text/html" });
               res.end(`<!DOCTYPE html>
 <html><head><title>Sign-in Complete</title>
 <style>
@@ -324,47 +366,67 @@ app.whenReady().then(async () => {
               return;
             }
 
-            if (req.url === '/receive-token' && req.method === 'POST') {
-              let body = '';
-              req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
-              req.on('end', () => {
-                res.writeHead(200, { 'Content-Type': 'application/json' });
+            if (req.url === "/receive-token" && req.method === "POST") {
+              let body = "";
+              req.on("data", (chunk: Buffer) => {
+                body += chunk.toString();
+              });
+              req.on("end", () => {
+                res.writeHead(200, { "Content-Type": "application/json" });
                 res.end('{"ok":true}');
 
                 try {
                   const tokens = JSON.parse(body);
-                  const accessToken = tokens.access_token || '';
-                  const refreshToken = tokens.refresh_token || '';
-                  const expiresIn = tokens.expires_in || '3600';
-                  const tokenType = tokens.token_type || 'bearer';
+                  const accessToken = tokens.access_token || "";
+                  const refreshToken = tokens.refresh_token || "";
+                  const expiresIn = tokens.expires_in || "3600";
+                  const tokenType = tokens.token_type || "bearer";
 
                   if (accessToken) {
-                    console.log('[WebView Auth] Received tokens, forwarding to webview...');
+                    console.log(
+                      "[WebView Auth] Received tokens, forwarding to webview...",
+                    );
                     // Build the hash fragment with all token params
                     const hashParams = new URLSearchParams();
-                    hashParams.set('access_token', accessToken);
-                    hashParams.set('refresh_token', refreshToken);
-                    hashParams.set('expires_in', expiresIn);
-                    hashParams.set('token_type', tokenType);
-                    if (tokens.provider_token) hashParams.set('provider_token', tokens.provider_token);
-                    if (tokens.provider_refresh_token) hashParams.set('provider_refresh_token', tokens.provider_refresh_token);
+                    hashParams.set("access_token", accessToken);
+                    hashParams.set("refresh_token", refreshToken);
+                    hashParams.set("expires_in", expiresIn);
+                    hashParams.set("token_type", tokenType);
+                    if (tokens.provider_token)
+                      hashParams.set("provider_token", tokens.provider_token);
+                    if (tokens.provider_refresh_token)
+                      hashParams.set(
+                        "provider_refresh_token",
+                        tokens.provider_refresh_token,
+                      );
 
                     // Navigate webview to the app's original callback URL with tokens
                     // in the hash fragment — this lets the app's own Supabase client
                     // process the tokens through its normal auth callback handler.
-                    const callbackUrl = (originalRedirectTo || appOrigin || contents.getURL())
-                      + '#' + hashParams.toString();
-                    console.log('[WebView Auth] Navigating webview to callback:', callbackUrl.replace(/access_token=[^&]+/, 'access_token=***'));
+                    const callbackUrl =
+                      (originalRedirectTo || appOrigin || contents.getURL()) +
+                      "#" +
+                      hashParams.toString();
+                    console.log(
+                      "[WebView Auth] Navigating webview to callback:",
+                      callbackUrl.replace(
+                        /access_token=[^&]+/,
+                        "access_token=***",
+                      ),
+                    );
                     contents.loadURL(callbackUrl);
                   }
                 } catch (err) {
-                  console.error('[WebView Auth] Failed to process tokens:', err);
+                  console.error(
+                    "[WebView Auth] Failed to process tokens:",
+                    err,
+                  );
                 }
 
                 // Shut down the temp server after a short delay
                 setTimeout(() => {
                   tokenServer.close();
-                  console.log('[WebView Auth] Token bridge server closed');
+                  console.log("[WebView Auth] Token bridge server closed");
                 }, 2000);
               });
               return;
@@ -372,24 +434,30 @@ app.whenReady().then(async () => {
 
             // Anything else — 404
             res.writeHead(404);
-            res.end('Not found');
+            res.end("Not found");
           });
 
-          tokenServer.listen(0, '127.0.0.1', () => {
+          tokenServer.listen(0, "127.0.0.1", () => {
             const port = (tokenServer.address() as any).port;
             console.log(`[WebView Auth] Token bridge server on port ${port}`);
 
             // Rewrite the OAuth URL to redirect back to our token bridge
             const parsed = new URL(url);
-            parsed.searchParams.set('redirect_to', `http://127.0.0.1:${port}/auth-callback`);
+            parsed.searchParams.set(
+              "redirect_to",
+              `http://127.0.0.1:${port}/auth-callback`,
+            );
             const authUrl = parsed.toString();
 
             shell.openExternal(authUrl);
 
             // Auto-cleanup after 5 minutes in case OAuth is abandoned
-            setTimeout(() => {
-              tokenServer.close();
-            }, 5 * 60 * 1000);
+            setTimeout(
+              () => {
+                tokenServer.close();
+              },
+              5 * 60 * 1000,
+            );
           });
         }
       });
@@ -398,7 +466,7 @@ app.whenReady().then(async () => {
 });
 
 // macOS: re-create window when dock icon is clicked
-app.on('activate', () => {
+app.on("activate", () => {
   if (mainWindow) {
     showWindow();
   } else {
@@ -407,6 +475,6 @@ app.on('activate', () => {
 });
 
 // Don't quit when all windows are closed (tray keeps app alive)
-app.on('window-all-closed', () => {
+app.on("window-all-closed", () => {
   // No-op — tray keeps the app running
 });

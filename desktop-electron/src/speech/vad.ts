@@ -10,9 +10,9 @@ const DEFAULT_SILENCE_TIMEOUT_MS = 800;
 const CALIBRATION_FRAMES = 66; // ~2 seconds
 
 export type VadEvent =
-  | { type: 'utterance'; samples: Float32Array }
-  | { type: 'speaking-changed'; speaking: boolean }
-  | { type: 'calibrated' };
+  | { type: "utterance"; samples: Float32Array }
+  | { type: "speaking-changed"; speaking: boolean }
+  | { type: "calibrated" };
 
 export class VadProcessor {
   private frameSize: number;
@@ -75,7 +75,7 @@ export class VadProcessor {
         const ambient = lowerHalf.reduce((a, b) => a + b, 0) / lowerHalf.length;
         this.energyThreshold = Math.min(Math.max(ambient * 3.0, 0.01), 0.03);
         this.calibrated = true;
-        events.push({ type: 'calibrated' });
+        events.push({ type: "calibrated" });
       }
       return;
     }
@@ -92,7 +92,7 @@ export class VadProcessor {
 
       if (!this.isSpeaking) {
         this.isSpeaking = true;
-        events.push({ type: 'speaking-changed', speaking: true });
+        events.push({ type: "speaking-changed", speaking: true });
         this.buffer.length = 0;
       }
 
@@ -101,8 +101,8 @@ export class VadProcessor {
       const speechMs = this.speechFrames * FRAME_MS;
       if (speechMs >= MAX_SPEECH_MS) {
         const utterance = this.finishUtterance();
-        if (utterance) events.push({ type: 'utterance', samples: utterance });
-        events.push({ type: 'speaking-changed', speaking: false });
+        if (utterance) events.push({ type: "utterance", samples: utterance });
+        events.push({ type: "speaking-changed", speaking: false });
       }
     } else if (this.isSpeaking) {
       this.silenceFrames++;
@@ -113,11 +113,11 @@ export class VadProcessor {
         const speechMs = this.speechFrames * FRAME_MS;
         if (speechMs >= MIN_SPEECH_MS) {
           const utterance = this.finishUtterance();
-          if (utterance) events.push({ type: 'utterance', samples: utterance });
+          if (utterance) events.push({ type: "utterance", samples: utterance });
         } else {
           this.resetState();
         }
-        events.push({ type: 'speaking-changed', speaking: false });
+        events.push({ type: "speaking-changed", speaking: false });
       }
     }
   }

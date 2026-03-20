@@ -1,22 +1,38 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
-import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
-import { trpc, createTRPCClient } from './lib/trpc';
-import { connectStream, useStreamStore, setQueryClient } from './lib/websocket';
-import { api } from './lib/api';
-import { getPendingTerminalCount, onTerminalConnectionChange } from './components/Terminal';
-import { ProjectDashboard } from './components/ProjectDashboard';
-import { ProjectView, cleanupProjectStorage } from './components/ProjectView';
-import { X, LayoutGrid, FolderOpen, Monitor, Loader2, Settings, ArrowUpCircle } from 'lucide-react';
-import { isDesktop, getDesktopVersion } from './lib/tauri';
-import { AgentGuideButton } from './components/AgentGuide';
-import { CloseTabModal } from './components/CloseTabModal';
-import { SettingsModal } from './components/SettingsModal';
-import { ActiveTerminals } from './components/ActiveTerminals';
-import { GlobalMicButton } from './components/GlobalMicButton';
-import { ModelDownloadModal } from './components/ModelDownloadModal';
-import { initSpeechListeners } from './lib/speech';
-import { onVoiceCommand } from './lib/voice-commands';
-import type { VoiceCommandPayload } from './lib/voice-commands';
+import { useEffect, useState, useCallback, useRef } from "react";
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { trpc, createTRPCClient } from "./lib/trpc";
+import { connectStream, useStreamStore, setQueryClient } from "./lib/websocket";
+import { api } from "./lib/api";
+import {
+  getPendingTerminalCount,
+  onTerminalConnectionChange,
+} from "./components/Terminal";
+import { ProjectDashboard } from "./components/ProjectDashboard";
+import { ProjectView, cleanupProjectStorage } from "./components/ProjectView";
+import {
+  X,
+  LayoutGrid,
+  FolderOpen,
+  Monitor,
+  Loader2,
+  Settings,
+  ArrowUpCircle,
+} from "lucide-react";
+import { isDesktop, getDesktopVersion } from "./lib/tauri";
+import { AgentGuideButton } from "./components/AgentGuide";
+import { CloseTabModal } from "./components/CloseTabModal";
+import { SettingsModal } from "./components/SettingsModal";
+import { ActiveTerminals } from "./components/ActiveTerminals";
+import { GlobalMicButton } from "./components/GlobalMicButton";
+import { ModelDownloadModal } from "./components/ModelDownloadModal";
+import { initSpeechListeners } from "./lib/speech";
+import { onVoiceCommand } from "./lib/voice-commands";
+import type { VoiceCommandPayload } from "./lib/voice-commands";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -36,14 +52,21 @@ interface ProjectTab {
   projectName: string;
 }
 
-const APP_STATE_KEY = 'octoally-app-state-v2';
+const APP_STATE_KEY = "octoally-app-state-v2";
 
-function loadAppState(): { activeTab: string; projectTabs: ProjectTab[] } | null {
+function loadAppState(): {
+  activeTab: string;
+  projectTabs: ProjectTab[];
+} | null {
   try {
     const raw = localStorage.getItem(APP_STATE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed.activeTab === 'string' && Array.isArray(parsed.projectTabs)) {
+    if (
+      parsed &&
+      typeof parsed.activeTab === "string" &&
+      Array.isArray(parsed.projectTabs)
+    ) {
       return parsed;
     }
   } catch {}
@@ -52,14 +75,19 @@ function loadAppState(): { activeTab: string; projectTabs: ProjectTab[] } | null
 
 function saveAppState(activeTab: string, projectTabs: ProjectTab[]) {
   try {
-    localStorage.setItem(APP_STATE_KEY, JSON.stringify({ activeTab, projectTabs }));
+    localStorage.setItem(
+      APP_STATE_KEY,
+      JSON.stringify({ activeTab, projectTabs }),
+    );
   } catch {}
 }
 
 function Dashboard() {
   const connected = useStreamStore((s) => s.connected);
   const [savedState] = useState(loadAppState);
-  const [activeTab, setActiveTab] = useState<string>(savedState?.activeTab ?? 'home');
+  const [activeTab, setActiveTab] = useState<string>(
+    savedState?.activeTab ?? "home",
+  );
   const [focusSessionId, setFocusSessionId] = useState<string | null>(null);
   const [projectTabs, setProjectTabs] = useState<ProjectTab[]>(() => {
     const tabs = savedState?.projectTabs ?? [];
@@ -75,41 +103,49 @@ function Dashboard() {
   // Track hidden session IDs reported by each ProjectView
   const hiddenSessionIdsRef = useRef<Map<string, string[]>>(new Map());
   const [hiddenSessionIds, setHiddenSessionIds] = useState<string[]>([]);
-  const handleHiddenSessionsChange = useCallback((projectId: string, sessionIds: string[]) => {
-    hiddenSessionIdsRef.current.set(projectId, sessionIds);
-    const all: string[] = [];
-    for (const ids of hiddenSessionIdsRef.current.values()) all.push(...ids);
-    setHiddenSessionIds(all);
-  }, []);
+  const handleHiddenSessionsChange = useCallback(
+    (projectId: string, sessionIds: string[]) => {
+      hiddenSessionIdsRef.current.set(projectId, sessionIds);
+      const all: string[] = [];
+      for (const ids of hiddenSessionIdsRef.current.values()) all.push(...ids);
+      setHiddenSessionIds(all);
+    },
+    [],
+  );
   // Stable per-project callbacks to avoid inline arrow re-creation on every render
-  const hiddenSessionsCallbacksRef = useRef<Map<string, (ids: string[]) => void>>(new Map());
-  const getHiddenSessionsCallback = useCallback((projectId: string) => {
-    let cb = hiddenSessionsCallbacksRef.current.get(projectId);
-    if (!cb) {
-      cb = (ids: string[]) => handleHiddenSessionsChange(projectId, ids);
-      hiddenSessionsCallbacksRef.current.set(projectId, cb);
-    }
-    return cb;
-  }, [handleHiddenSessionsChange]);
+  const hiddenSessionsCallbacksRef = useRef<
+    Map<string, (ids: string[]) => void>
+  >(new Map());
+  const getHiddenSessionsCallback = useCallback(
+    (projectId: string) => {
+      let cb = hiddenSessionsCallbacksRef.current.get(projectId);
+      if (!cb) {
+        cb = (ids: string[]) => handleHiddenSessionsChange(projectId, ids);
+        hiddenSessionsCallbacksRef.current.set(projectId, cb);
+      }
+      return cb;
+    },
+    [handleHiddenSessionsChange],
+  );
 
   const queryClient = useQueryClient();
 
   const { data: projectsData } = useQuery({
-    queryKey: ['projects'],
+    queryKey: ["projects"],
     queryFn: () => api.projects.list(),
   });
 
   // Sessions — driven by WebSocket invalidation (websocket.ts invalidates on session.* events).
   // Long fallback interval for stale-data recovery only.
   const { data: sessionsData } = useQuery({
-    queryKey: ['sessions'],
+    queryKey: ["sessions"],
     queryFn: () => api.sessions.list(),
     refetchInterval: 60_000,
   });
 
   // Server version from health endpoint
   const { data: healthData } = useQuery({
-    queryKey: ['health'],
+    queryKey: ["health"],
     queryFn: () => api.health(),
     staleTime: Infinity,
     refetchOnWindowFocus: false,
@@ -118,7 +154,7 @@ function Dashboard() {
 
   // Version check — poll every 30 minutes
   const { data: versionData } = useQuery({
-    queryKey: ['version-check'],
+    queryKey: ["version-check"],
     queryFn: () => api.versionCheck(),
     staleTime: 30 * 60 * 1000,
     refetchInterval: 30 * 60 * 1000,
@@ -143,22 +179,27 @@ function Dashboard() {
   // Copy update command to clipboard and show brief confirmation.
   const [updateCopied, setUpdateCopied] = useState(false);
   const triggerUpdate = useCallback(async () => {
-    const cmd = 'curl -fsSL https://raw.githubusercontent.com/ai-genius-automations/octoally/main/scripts/install.sh | bash';
+    const cmd =
+      "curl -fsSL https://raw.githubusercontent.com/ai-genius-automations/octoally/main/scripts/install.sh | bash";
     try {
       await navigator.clipboard.writeText(cmd);
       setUpdateCopied(true);
       setTimeout(() => setUpdateCopied(false), 4000);
     } catch {
       // Fallback: select from prompt
-      window.prompt('Copy this command and run it in your terminal:', cmd);
+      window.prompt("Copy this command and run it in your terminal:", cmd);
     }
   }, []);
 
   // Track terminals that are connecting (WS not yet open).
   // Subscribe to the global connection tracker from Terminal.tsx.
-  const [pendingTerminals, setPendingTerminals] = useState(getPendingTerminalCount);
+  const [pendingTerminals, setPendingTerminals] = useState(
+    getPendingTerminalCount,
+  );
   useEffect(() => {
-    return onTerminalConnectionChange(() => setPendingTerminals(getPendingTerminalCount()));
+    return onTerminalConnectionChange(() =>
+      setPendingTerminals(getPendingTerminalCount()),
+    );
   }, []);
 
   // Show indicator while terminals are connecting, then briefly after all connect.
@@ -196,7 +237,7 @@ function Dashboard() {
     }
   }, [showReconnectIndicator, connectTotal, pendingTerminals]);
   const activeSessionCount = sessions.filter(
-    (s) => s.status === 'running' || s.status === 'detached'
+    (s) => s.status === "running" || s.status === "detached",
   ).length;
   const [showActiveTerminals, setShowActiveTerminals] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -204,7 +245,7 @@ function Dashboard() {
   const dismissActiveTerminals = useCallback(() => {
     setShowActiveTerminals(false);
     // Fire a resize event so terminals re-fit to their restored container size
-    requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+    requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
   }, []);
 
   useEffect(() => {
@@ -216,21 +257,21 @@ function Dashboard() {
   // Voice command handler
   useEffect(() => {
     return onVoiceCommand((payload: VoiceCommandPayload) => {
-      if (payload.action.kind === 'navigate') {
+      if (payload.action.kind === "navigate") {
         const target = payload.action.target;
-        if (target === 'home') {
-          setActiveTab('home');
+        if (target === "home") {
+          setActiveTab("home");
           dismissActiveTerminals();
-        } else if (target === 'sessions') {
+        } else if (target === "sessions") {
           setShowActiveTerminals(true);
-        } else if (target === 'show-all') {
-          if (activeTab.startsWith('project-')) {
-            setFocusSessionId('__voice_show_all');
+        } else if (target === "show-all") {
+          if (activeTab.startsWith("project-")) {
+            setFocusSessionId("__voice_show_all");
           }
-        } else if (target === 'project' && payload.param) {
-          const normalized = payload.param.toLowerCase().replace(/\s+/g, '');
+        } else if (target === "project" && payload.param) {
+          const normalized = payload.param.toLowerCase().replace(/\s+/g, "");
           const match = projects.find((p) => {
-            const pn = p.name.toLowerCase().replace(/\s+/g, '');
+            const pn = p.name.toLowerCase().replace(/\s+/g, "");
             return pn.includes(normalized) || normalized.includes(pn);
           });
           if (match) {
@@ -239,69 +280,106 @@ function Dashboard() {
           } else {
             console.warn(`[STT] No project matched: "${payload.param}"`);
           }
-        } else if (target === 'terminal' || target === 'hivemind') {
-          if (activeTab.startsWith('project-')) {
+        } else if (target === "terminal" || target === "hivemind") {
+          if (activeTab.startsWith("project-")) {
             const numberWords: Record<string, number> = {
-              one: 1, two: 2, three: 3, four: 4, five: 5,
-              six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
-              first: 1, second: 2, third: 3, fourth: 4, fifth: 5,
+              one: 1,
+              two: 2,
+              three: 3,
+              four: 4,
+              five: 5,
+              six: 6,
+              seven: 7,
+              eight: 8,
+              nine: 9,
+              ten: 10,
+              first: 1,
+              second: 2,
+              third: 3,
+              fourth: 4,
+              fifth: 5,
             };
             let numStr = payload.param;
             if (!numStr && payload.rawText) {
-              const words = payload.rawText.toLowerCase().replace(/[^\w\s]/g, '').trim().split(/\s+/);
+              const words = payload.rawText
+                .toLowerCase()
+                .replace(/[^\w\s]/g, "")
+                .trim()
+                .split(/\s+/);
               const lastWord = words[words.length - 1];
               if (numberWords[lastWord] || /^\d+$/.test(lastWord)) {
                 numStr = lastWord;
               }
             }
-            const paramLower = (numStr || '').toLowerCase().trim();
+            const paramLower = (numStr || "").toLowerCase().trim();
             const num = numberWords[paramLower] ?? parseInt(paramLower, 10);
-            console.log(`[STT] Navigate ${target} #${num} (param: "${payload.param}", rawText: "${payload.rawText}", extracted: "${numStr}")`);
+            console.log(
+              `[STT] Navigate ${target} #${num} (param: "${payload.param}", rawText: "${payload.rawText}", extracted: "${numStr}")`,
+            );
             if (!isNaN(num)) {
               setFocusSessionId(`__voice_${target}_${num}`);
             }
           }
         }
-      } else if (payload.action.kind === 'create-session') {
-        if (activeTab.startsWith('project-')) {
+      } else if (payload.action.kind === "create-session") {
+        if (activeTab.startsWith("project-")) {
           setFocusSessionId(`__voice_create_${payload.action.sessionType}`);
         }
-      } else if (payload.action.kind === 'close-session') {
-        if (activeTab.startsWith('project-')) {
+      } else if (payload.action.kind === "close-session") {
+        if (activeTab.startsWith("project-")) {
           setFocusSessionId(`__voice_close_${payload.action.sessionType}`);
         }
-      } else if (payload.action.kind === 'close-project') {
+      } else if (payload.action.kind === "close-project") {
         // Dispatch a custom event — handled after closeProjectTab is defined
-        window.dispatchEvent(new CustomEvent('octoally:voice-close-project', {
-          detail: { param: payload.param },
-        }));
-      } else if (payload.action.kind === 'refresh-tab') {
-        if (activeTab.startsWith('project-')) {
-          setFocusSessionId('__voice_refresh_tab');
+        window.dispatchEvent(
+          new CustomEvent("octoally:voice-close-project", {
+            detail: { param: payload.param },
+          }),
+        );
+      } else if (payload.action.kind === "refresh-tab") {
+        if (activeTab.startsWith("project-")) {
+          setFocusSessionId("__voice_refresh_tab");
         }
-      } else if (payload.action.kind === 'refresh-page') {
+      } else if (payload.action.kind === "refresh-page") {
         window.location.reload();
-      } else if (payload.action.kind === 'delete-words') {
+      } else if (payload.action.kind === "delete-words") {
         const numberWords: Record<string, number> = {
-          one: 1, two: 2, three: 3, four: 4, five: 5,
-          six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+          one: 1,
+          two: 2,
+          three: 3,
+          four: 4,
+          five: 5,
+          six: 6,
+          seven: 7,
+          eight: 8,
+          nine: 9,
+          ten: 10,
         };
-        const cleaned = payload.param.toLowerCase().replace(/\bwords?\b/g, '').trim();
+        const cleaned = payload.param
+          .toLowerCase()
+          .replace(/\bwords?\b/g, "")
+          .trim();
         const count = numberWords[cleaned] ?? (parseInt(cleaned, 10) || 1);
-        console.log(`[STT] Delete ${count} words (param: "${payload.param}", cleaned: "${cleaned}")`);
+        console.log(
+          `[STT] Delete ${count} words (param: "${payload.param}", cleaned: "${cleaned}")`,
+        );
         // Send Ctrl+W one at a time with small delays so the shell processes each
         for (let i = 0; i < count; i++) {
           setTimeout(() => {
-            window.dispatchEvent(new CustomEvent('octoally:terminal-input', {
-              detail: { data: '\x17' },
-            }));
+            window.dispatchEvent(
+              new CustomEvent("octoally:terminal-input", {
+                detail: { data: "\x17" },
+              }),
+            );
           }, i * 50);
         }
-      } else if (payload.action.kind === 'clear-text') {
+      } else if (payload.action.kind === "clear-text") {
         // Ctrl+U = kill line in bash/zsh
-        window.dispatchEvent(new CustomEvent('octoally:terminal-input', {
-          detail: { data: '\x15' },
-        }));
+        window.dispatchEvent(
+          new CustomEvent("octoally:terminal-input", {
+            detail: { data: "\x15" },
+          }),
+        );
       }
     });
   }, [projects, activeTab]);
@@ -311,7 +389,11 @@ function Dashboard() {
     saveAppState(activeTab, projectTabs);
   }, [activeTab, projectTabs]);
 
-  function handleOpenProject(projectId: string, projectName: string, quickLaunch?: 'hivemind' | 'agent' | 'terminal') {
+  function handleOpenProject(
+    projectId: string,
+    projectName: string,
+    quickLaunch?: "hivemind" | "agent" | "terminal",
+  ) {
     setProjectTabs((prev) => {
       if (prev.find((t) => t.projectId === projectId)) return prev;
       return [...prev, { projectId, projectName }];
@@ -322,42 +404,52 @@ function Dashboard() {
     }
   }
 
-  const [confirmClose, setConfirmClose] = useState<{ projectId: string; count: number } | null>(null);
+  const [confirmClose, setConfirmClose] = useState<{
+    projectId: string;
+    count: number;
+  } | null>(null);
 
-  const closeProjectTab = useCallback(async (projectId: string) => {
-    // Fetch fresh session list — cached data may be stale (e.g. right after quick-launch)
-    let runningSessions = sessions.filter(
-      (s) => s.project_id === projectId && (s.status === 'running' || s.status === 'detached')
-    );
-    if (runningSessions.length === 0) {
-      try {
-        const fresh = await api.sessions.list();
-        runningSessions = (fresh.sessions || []).filter(
-          (s: any) => s.project_id === projectId && (s.status === 'running' || s.status === 'detached')
-        );
-      } catch {}
-    }
+  const closeProjectTab = useCallback(
+    async (projectId: string) => {
+      // Fetch fresh session list — cached data may be stale (e.g. right after quick-launch)
+      let runningSessions = sessions.filter(
+        (s) =>
+          s.project_id === projectId &&
+          (s.status === "running" || s.status === "detached"),
+      );
+      if (runningSessions.length === 0) {
+        try {
+          const fresh = await api.sessions.list();
+          runningSessions = (fresh.sessions || []).filter(
+            (s: any) =>
+              s.project_id === projectId &&
+              (s.status === "running" || s.status === "detached"),
+          );
+        } catch {}
+      }
 
-    if (runningSessions.length > 0) {
-      setConfirmClose({ projectId, count: runningSessions.length });
-      return;
-    }
+      if (runningSessions.length > 0) {
+        setConfirmClose({ projectId, count: runningSessions.length });
+        return;
+      }
 
-    cleanupProjectStorage(projectId);
-    setProjectTabs((prev) => prev.filter((t) => t.projectId !== projectId));
-    if (activeTab === `project-${projectId}`) {
-      setActiveTab('home');
-    }
-  }, [sessions, activeTab]);
+      cleanupProjectStorage(projectId);
+      setProjectTabs((prev) => prev.filter((t) => t.projectId !== projectId));
+      if (activeTab === `project-${projectId}`) {
+        setActiveTab("home");
+      }
+    },
+    [sessions, activeTab],
+  );
 
   // Voice command: close project
   useEffect(() => {
     const handler = (e: Event) => {
       const { param } = (e as CustomEvent).detail;
       if (param) {
-        const normalized = param.toLowerCase().replace(/\s+/g, '');
+        const normalized = param.toLowerCase().replace(/\s+/g, "");
         const match = projects.find((p) => {
-          const pn = p.name.toLowerCase().replace(/\s+/g, '');
+          const pn = p.name.toLowerCase().replace(/\s+/g, "");
           return pn.includes(normalized) || normalized.includes(pn);
         });
         if (match) {
@@ -366,14 +458,15 @@ function Dashboard() {
           console.warn(`[STT] No project matched for close: "${param}"`);
         }
       } else {
-        if (activeTab.startsWith('project-')) {
-          const projectId = activeTab.replace('project-', '');
+        if (activeTab.startsWith("project-")) {
+          const projectId = activeTab.replace("project-", "");
           closeProjectTab(projectId);
         }
       }
     };
-    window.addEventListener('octoally:voice-close-project', handler);
-    return () => window.removeEventListener('octoally:voice-close-project', handler);
+    window.addEventListener("octoally:voice-close-project", handler);
+    return () =>
+      window.removeEventListener("octoally:voice-close-project", handler);
   }, [projects, activeTab, closeProjectTab]);
 
   async function confirmCloseProject() {
@@ -384,44 +477,59 @@ function Dashboard() {
     cleanupProjectStorage(projectId);
     setProjectTabs((prev) => prev.filter((t) => t.projectId !== projectId));
     if (activeTab === `project-${projectId}`) {
-      setActiveTab('home');
+      setActiveTab("home");
     }
     setConfirmClose(null);
 
     // Kill sessions in the background — fetch fresh list to catch recently created ones
     let runningSessions = sessions.filter(
-      (s) => s.project_id === projectId && (s.status === 'running' || s.status === 'detached')
+      (s) =>
+        s.project_id === projectId &&
+        (s.status === "running" || s.status === "detached"),
     );
     try {
       const fresh = await api.sessions.list();
       const freshRunning = (fresh.sessions || []).filter(
-        (s: any) => s.project_id === projectId && (s.status === 'running' || s.status === 'detached')
+        (s: any) =>
+          s.project_id === projectId &&
+          (s.status === "running" || s.status === "detached"),
       );
       if (freshRunning.length > runningSessions.length) {
         runningSessions = freshRunning;
       }
     } catch {}
 
-    Promise.all(runningSessions.map((s) => api.sessions.kill(s.id).catch(() => {})))
-      .then(() => queryClient.invalidateQueries({ queryKey: ['sessions'] }));
+    Promise.all(
+      runningSessions.map((s) => api.sessions.kill(s.id).catch(() => {})),
+    ).then(() => queryClient.invalidateQueries({ queryKey: ["sessions"] }));
   }
 
   return (
-    <div className="h-screen flex flex-col" style={{ background: 'var(--bg-primary)' }}>
+    <div
+      className="h-screen flex flex-col"
+      style={{ background: "var(--bg-primary)" }}
+    >
       {/* Header */}
       <header
         className="flex items-center justify-between px-4 py-2 border-b shrink-0"
-        style={{ borderColor: 'var(--border)', background: 'var(--bg-secondary)' }}
+        style={{
+          borderColor: "var(--border)",
+          background: "var(--bg-secondary)",
+        }}
       >
         <div className="flex items-center gap-2">
           <h1 className="text-base font-bold">
-            <span style={{ color: '#ef4444' }}>Octo</span><span style={{ color: 'var(--text-primary)' }}>Ally</span>
+            <span style={{ color: "#ef4444" }}>Octo</span>
+            <span style={{ color: "var(--text-primary)" }}>Ally</span>
           </h1>
           <div className="flex items-center gap-1">
             {desktopVersion && (
               <span
                 className="text-[10px] px-1.5 py-0.5 rounded-full"
-                style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}
+                style={{
+                  background: "var(--bg-tertiary)",
+                  color: "var(--text-secondary)",
+                }}
                 title={`Desktop app v${desktopVersion}`}
               >
                 app v{desktopVersion}
@@ -430,7 +538,10 @@ function Dashboard() {
             {serverVersion && (
               <span
                 className="text-[10px] px-1.5 py-0.5 rounded-full"
-                style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}
+                style={{
+                  background: "var(--bg-tertiary)",
+                  color: "var(--text-secondary)",
+                }}
                 title={`Server v${serverVersion}`}
               >
                 server v{serverVersion}
@@ -442,14 +553,18 @@ function Dashboard() {
           <button
             onClick={() => setShowActiveTerminals(true)}
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors"
-            style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
+            style={{
+              background: "var(--bg-tertiary)",
+              color: "var(--text-secondary)",
+              border: "1px solid var(--border)",
+            }}
           >
             <Monitor className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Active Sessions</span>
             {activeSessionCount > 0 && (
               <span
                 className="text-[10px] px-1.5 py-0.5 rounded-full font-bold"
-                style={{ background: 'var(--accent)', color: 'white' }}
+                style={{ background: "var(--accent)", color: "white" }}
               >
                 {activeSessionCount}
               </span>
@@ -460,22 +575,34 @@ function Dashboard() {
           {showReconnectIndicator && (
             <div
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium"
-              style={{ background: 'var(--bg-tertiary)', color: 'var(--warning, #f59e0b)' }}
+              style={{
+                background: "var(--bg-tertiary)",
+                color: "var(--warning, #f59e0b)",
+              }}
             >
               {pendingTerminals > 0 ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Connected {connectDone} of {connectTotal} terminal{connectTotal !== 1 ? 's' : ''}</span>
+                  <span>
+                    Connected {connectDone} of {connectTotal} terminal
+                    {connectTotal !== 1 ? "s" : ""}
+                  </span>
                 </>
               ) : (
-                <span>All {connectTotal} terminal{connectTotal !== 1 ? 's' : ''} connected</span>
+                <span>
+                  All {connectTotal} terminal{connectTotal !== 1 ? "s" : ""}{" "}
+                  connected
+                </span>
               )}
             </div>
           )}
           <button
             onClick={() => setShowSettings(true)}
             className="p-1.5 rounded-md transition-colors hover:opacity-80"
-            style={{ color: 'var(--text-secondary)', background: 'transparent' }}
+            style={{
+              color: "var(--text-secondary)",
+              background: "transparent",
+            }}
             title="Settings"
           >
             <Settings className="w-4 h-4" />
@@ -483,10 +610,15 @@ function Dashboard() {
           <div className="flex items-center gap-2">
             <div
               className="w-2 h-2 rounded-full"
-              style={{ background: connected ? 'var(--success)' : 'var(--error)' }}
+              style={{
+                background: connected ? "var(--success)" : "var(--error)",
+              }}
             />
-            <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-              {connected ? 'Connected' : 'Disconnected'}
+            <span
+              className="text-xs"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              {connected ? "Connected" : "Disconnected"}
             </span>
           </div>
         </div>
@@ -496,22 +628,45 @@ function Dashboard() {
       {versionData?.updateAvailable && !updateDismissed && (
         <div
           className="flex items-center justify-between px-4 py-1.5 text-xs shrink-0"
-          style={{ background: 'rgba(96, 165, 250, 0.1)', borderBottom: '1px solid rgba(96, 165, 250, 0.2)' }}
+          style={{
+            background: "rgba(96, 165, 250, 0.1)",
+            borderBottom: "1px solid rgba(96, 165, 250, 0.2)",
+          }}
         >
           <div className="flex items-center gap-2">
-            <ArrowUpCircle className="w-3.5 h-3.5 shrink-0" style={{ color: '#60a5fa' }} />
-            <span style={{ color: 'var(--text-secondary)' }}>
-              <strong style={{ color: 'var(--text-primary)' }}>OctoAlly v{versionData.latest}</strong>
-              {versionData.prerelease && <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium" style={{ background: 'rgba(250, 204, 21, 0.15)', color: '#facc15' }}>pre-release</span>}
-              {' '}is available
+            <ArrowUpCircle
+              className="w-3.5 h-3.5 shrink-0"
+              style={{ color: "#60a5fa" }}
+            />
+            <span style={{ color: "var(--text-secondary)" }}>
+              <strong style={{ color: "var(--text-primary)" }}>
+                OctoAlly v{versionData.latest}
+              </strong>
+              {versionData.prerelease && (
+                <span
+                  className="ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium"
+                  style={{
+                    background: "rgba(250, 204, 21, 0.15)",
+                    color: "#facc15",
+                  }}
+                >
+                  pre-release
+                </span>
+              )}{" "}
+              is available
               {versionData.name && <span> &mdash; {versionData.name}</span>}
             </span>
             <button
               onClick={() => triggerUpdate()}
               className="px-2 py-0.5 rounded text-[10px] font-medium transition-colors hover:brightness-110"
-              style={{ background: 'rgba(96, 165, 250, 0.2)', color: '#60a5fa' }}
+              style={{
+                background: "rgba(96, 165, 250, 0.2)",
+                color: "#60a5fa",
+              }}
             >
-              {updateCopied ? 'Copied — paste in terminal!' : 'Copy Update Command'}
+              {updateCopied
+                ? "Copied — paste in terminal!"
+                : "Copy Update Command"}
             </button>
             {versionData.url && (
               <a
@@ -519,7 +674,10 @@ function Dashboard() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="px-2 py-0.5 rounded text-[10px] font-medium"
-                style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)' }}
+                style={{
+                  background: "rgba(255,255,255,0.05)",
+                  color: "var(--text-secondary)",
+                }}
               >
                 Release Notes
               </a>
@@ -528,7 +686,7 @@ function Dashboard() {
           <button
             onClick={() => setUpdateDismissed(true)}
             className="p-0.5 rounded hover:opacity-80"
-            style={{ color: 'var(--text-secondary)' }}
+            style={{ color: "var(--text-secondary)" }}
           >
             <X className="w-3 h-3" />
           </button>
@@ -538,15 +696,25 @@ function Dashboard() {
       {/* Tab bar */}
       <nav
         className="flex items-center gap-0.5 px-2 py-1 border-b shrink-0 overflow-x-auto"
-        style={{ borderColor: 'var(--border)', background: 'var(--bg-secondary)' }}
+        style={{
+          borderColor: "var(--border)",
+          background: "var(--bg-secondary)",
+        }}
       >
         {/* Home tab */}
         <button
-          onClick={() => { setActiveTab('home'); dismissActiveTerminals(); }}
+          onClick={() => {
+            setActiveTab("home");
+            dismissActiveTerminals();
+          }}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors shrink-0"
           style={{
-            background: activeTab === 'home' ? 'var(--bg-tertiary)' : 'transparent',
-            color: activeTab === 'home' ? 'var(--text-primary)' : 'var(--text-secondary)',
+            background:
+              activeTab === "home" ? "var(--bg-tertiary)" : "transparent",
+            color:
+              activeTab === "home"
+                ? "var(--text-primary)"
+                : "var(--text-secondary)",
           }}
         >
           <LayoutGrid className="w-3.5 h-3.5" />
@@ -557,7 +725,7 @@ function Dashboard() {
         {projectTabs.length > 0 && (
           <div
             className="w-px h-5 mx-1 shrink-0"
-            style={{ background: 'var(--border)' }}
+            style={{ background: "var(--border)" }}
           />
         )}
 
@@ -570,14 +738,26 @@ function Dashboard() {
             <div
               key={tab.projectId}
               className="flex items-center gap-1 rounded-md shrink-0 group"
-              style={{ background: isActive ? 'var(--bg-tertiary)' : 'transparent' }}
+              style={{
+                background: isActive ? "var(--bg-tertiary)" : "transparent",
+              }}
             >
               <button
-                onClick={() => { setActiveTab(tabId); dismissActiveTerminals(); }}
+                onClick={() => {
+                  setActiveTab(tabId);
+                  dismissActiveTerminals();
+                }}
                 className="flex items-center gap-1.5 pl-3 pr-1 py-1.5 text-xs font-medium transition-colors max-w-[180px]"
-                style={{ color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)' }}
+                style={{
+                  color: isActive
+                    ? "var(--text-primary)"
+                    : "var(--text-secondary)",
+                }}
               >
-                <FolderOpen className="w-3 h-3 shrink-0" style={{ color: 'var(--accent)' }} />
+                <FolderOpen
+                  className="w-3 h-3 shrink-0"
+                  style={{ color: "var(--accent)" }}
+                />
                 <span className="truncate">{tab.projectName}</span>
               </button>
               <button
@@ -586,7 +766,7 @@ function Dashboard() {
                   closeProjectTab(tab.projectId);
                 }}
                 className="p-1 rounded hover:opacity-100 opacity-0 group-hover:opacity-60 transition-opacity mr-1"
-                style={{ color: 'var(--text-secondary)' }}
+                style={{ color: "var(--text-secondary)" }}
                 title="Close tab"
               >
                 <X className="w-3 h-3" />
@@ -620,7 +800,7 @@ function Dashboard() {
         )}
         <div
           className="h-full"
-          style={{ display: activeTab === 'home' ? 'block' : 'none' }}
+          style={{ display: activeTab === "home" ? "block" : "none" }}
         >
           <ProjectDashboard onOpenProject={handleOpenProject} />
         </div>
@@ -628,18 +808,21 @@ function Dashboard() {
           const tabId = `project-${tab.projectId}`;
           const isActive = activeTab === tabId;
           const project = projects.find((p) => p.id === tab.projectId);
-          const projectPath = project?.path || '';
-          const projectName = tab?.projectName || project?.name || 'Project';
+          const projectPath = project?.path || "";
+          const projectName = tab?.projectName || project?.name || "Project";
 
           return (
             <div
               key={tab.projectId}
               className="h-full"
-              style={{ display: isActive ? 'block' : 'none' }}
+              style={{ display: isActive ? "block" : "none" }}
             >
               {!projectPath ? (
                 <div className="h-full flex items-center justify-center">
-                  <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  <p
+                    className="text-sm"
+                    style={{ color: "var(--text-secondary)" }}
+                  >
                     Loading project...
                   </p>
                 </div>
@@ -652,7 +835,9 @@ function Dashboard() {
                   terminalsSuspended={showActiveTerminals}
                   focusSessionId={isActive ? focusSessionId : null}
                   onFocusSessionHandled={() => setFocusSessionId(null)}
-                  onHiddenSessionsChange={getHiddenSessionsCallback(tab.projectId)}
+                  onHiddenSessionsChange={getHiddenSessionsCallback(
+                    tab.projectId,
+                  )}
                 />
               )}
             </div>
@@ -662,16 +847,21 @@ function Dashboard() {
 
       {confirmClose && (
         <CloseTabModal
-          label={projectTabs.find((t) => t.projectId === confirmClose.projectId)?.projectName || 'Project'}
+          label={
+            projectTabs.find((t) => t.projectId === confirmClose.projectId)
+              ?.projectName || "Project"
+          }
           type="project"
           sessionCount={confirmClose.count}
           onHide={() => {
             // Hide the project tab but keep sessions running
             const { projectId } = confirmClose;
             cleanupProjectStorage(projectId);
-            setProjectTabs((prev) => prev.filter((t) => t.projectId !== projectId));
+            setProjectTabs((prev) =>
+              prev.filter((t) => t.projectId !== projectId),
+            );
             if (activeTab === `project-${projectId}`) {
-              setActiveTab('home');
+              setActiveTab("home");
             }
             setConfirmClose(null);
           }}

@@ -18,11 +18,20 @@ body {
   margin: 0;
   background: var(--bg-primary);
   color: var(--text-primary);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
 }
 
 /* Global interactive element styles */
-button, [role="button"], select, a, summary {
+button,
+[role="button"],
+select,
+a,
+summary {
   cursor: pointer;
 }
 
@@ -56,16 +65,47 @@ select:hover {
   line-height: 1.7;
   max-width: 860px;
 }
-.markdown-preview h1 { font-size: 2em; font-weight: 700; margin: 1em 0 0.5em; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
-.markdown-preview h2 { font-size: 1.5em; font-weight: 600; margin: 1em 0 0.5em; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
-.markdown-preview h3 { font-size: 1.25em; font-weight: 600; margin: 1em 0 0.5em; }
-.markdown-preview h4 { font-size: 1em; font-weight: 600; margin: 1em 0 0.5em; }
-.markdown-preview p { margin: 0.75em 0; }
-.markdown-preview a { color: var(--accent); text-decoration: underline; }
-.markdown-preview ul, .markdown-preview ol { padding-left: 2em; margin: 0.5em 0; }
-.markdown-preview li { margin: 0.25em 0; }
+.markdown-preview h1 {
+  font-size: 2em;
+  font-weight: 700;
+  margin: 1em 0 0.5em;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.3em;
+}
+.markdown-preview h2 {
+  font-size: 1.5em;
+  font-weight: 600;
+  margin: 1em 0 0.5em;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.3em;
+}
+.markdown-preview h3 {
+  font-size: 1.25em;
+  font-weight: 600;
+  margin: 1em 0 0.5em;
+}
+.markdown-preview h4 {
+  font-size: 1em;
+  font-weight: 600;
+  margin: 1em 0 0.5em;
+}
+.markdown-preview p {
+  margin: 0.75em 0;
+}
+.markdown-preview a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.markdown-preview ul,
+.markdown-preview ol {
+  padding-left: 2em;
+  margin: 0.5em 0;
+}
+.markdown-preview li {
+  margin: 0.25em 0;
+}
 .markdown-preview code {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-family: "JetBrains Mono", "Fira Code", monospace;
   font-size: 0.9em;
   background: var(--bg-tertiary);
   padding: 0.15em 0.4em;
@@ -95,7 +135,8 @@ select:hover {
   width: 100%;
   margin: 0.75em 0;
 }
-.markdown-preview th, .markdown-preview td {
+.markdown-preview th,
+.markdown-preview td {
   border: 1px solid var(--border);
   padding: 0.5em 0.75em;
   text-align: left;

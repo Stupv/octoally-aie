@@ -6,10 +6,10 @@
  */
 
 export const isTauri =
-  typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 export const isElectron =
-  typeof window !== 'undefined' && 'electronAPI' in window;
+  typeof window !== "undefined" && "electronAPI" in window;
 
 /** True when running inside any desktop shell (Tauri or Electron) */
 export const isDesktop = isTauri || isElectron;
@@ -21,7 +21,7 @@ export async function getDesktopVersion(): Promise<string | null> {
       return await (window as any).electronAPI.getVersion();
     }
     if (isTauri) {
-      const { getVersion } = await import('@tauri-apps/api/app');
+      const { getVersion } = await import("@tauri-apps/api/app");
       return await getVersion();
     }
   } catch {}
@@ -36,7 +36,7 @@ export async function invoke<T>(
   if (isElectron) {
     return (window as any).electronAPI.invoke(cmd, args) as Promise<T>;
   }
-  const { invoke: tauriInvoke } = await import('@tauri-apps/api/core');
+  const { invoke: tauriInvoke } = await import("@tauri-apps/api/core");
   return tauriInvoke<T>(cmd, args);
 }
 
@@ -46,9 +46,11 @@ export async function listen<T>(
   handler: (payload: T) => void,
 ): Promise<() => void> {
   if (isElectron) {
-    return (window as any).electronAPI.on(event, (payload: T) => handler(payload));
+    return (window as any).electronAPI.on(event, (payload: T) =>
+      handler(payload),
+    );
   }
-  const { listen: tauriListen } = await import('@tauri-apps/api/event');
+  const { listen: tauriListen } = await import("@tauri-apps/api/event");
   const unlisten = await tauriListen<T>(event, (e) => handler(e.payload));
   return unlisten;
 }
@@ -57,12 +59,12 @@ export async function listen<T>(
 export async function exitDesktop(): Promise<void> {
   try {
     if (isElectron) {
-      await (window as any).electronAPI.invoke('app-quit');
+      await (window as any).electronAPI.invoke("app-quit");
       return;
     }
     if (isTauri) {
-      const { invoke: tauriInvoke } = await import('@tauri-apps/api/core');
-      await tauriInvoke('plugin:process|exit', { exitCode: 0 });
+      const { invoke: tauriInvoke } = await import("@tauri-apps/api/core");
+      await tauriInvoke("plugin:process|exit", { exitCode: 0 });
       return;
     }
   } catch {}

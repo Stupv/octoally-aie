@@ -3,7 +3,7 @@ name: Build Desktop App
 on:
   push:
     tags:
-      - 'desktop-v*'
+      - "desktop-v*"
   workflow_dispatch:
 
 permissions:

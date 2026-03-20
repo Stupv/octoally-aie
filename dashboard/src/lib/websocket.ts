@@ -1,6 +1,6 @@
-import { create } from 'zustand';
-import type { QueryClient } from '@tanstack/react-query';
-import type { Event } from './api';
+import { create } from "zustand";
+import type { QueryClient } from "@tanstack/react-query";
+import type { Event } from "./api";
 
 let queryClientRef: QueryClient | null = null;
 
@@ -32,7 +32,7 @@ let ws: WebSocket | null = null;
 export function connectStream() {
   if (ws) return;
 
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const url = `${protocol}//${window.location.host}/api/stream`;
 
   ws = new WebSocket(url);
@@ -46,8 +46,8 @@ export function connectStream() {
       const event = JSON.parse(msg.data);
       useStreamStore.getState().addEvent(event);
       // Invalidate sessions query on session lifecycle events so we don't need aggressive polling
-      if (event.type?.startsWith('session.') && queryClientRef) {
-        queryClientRef.invalidateQueries({ queryKey: ['sessions'] });
+      if (event.type?.startsWith("session.") && queryClientRef) {
+        queryClientRef.invalidateQueries({ queryKey: ["sessions"] });
       }
     } catch {
       // Ignore parse errors

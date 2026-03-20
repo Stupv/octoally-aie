@@ -1,15 +1,35 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { createPortal } from 'react-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Monitor, FolderTree, Code2, GitBranch, Home, Plus, X, Download, LayoutGrid, Maximize2, Minimize2, ExternalLink, Globe, Zap, Bot, TerminalSquare, Columns3, Rows3, ChevronDown } from 'lucide-react';
-import { Terminal } from './Terminal';
-import { FileExplorer } from './FileExplorer';
-import { GitPanel } from './GitPanel';
-import { SessionLauncher } from './SessionLauncher';
-import { WebPageView } from './WebPageView';
-import { api } from '../lib/api';
-import { DesktopUpdateBanner } from './DesktopUpdateBanner';
-import { CloseTabModal } from './CloseTabModal';
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { createPortal } from "react-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Monitor,
+  FolderTree,
+  Code2,
+  GitBranch,
+  Home,
+  Plus,
+  X,
+  Download,
+  LayoutGrid,
+  Maximize2,
+  Minimize2,
+  ExternalLink,
+  Globe,
+  Zap,
+  Bot,
+  TerminalSquare,
+  Columns3,
+  Rows3,
+  ChevronDown,
+} from "lucide-react";
+import { Terminal } from "./Terminal";
+import { FileExplorer } from "./FileExplorer";
+import { GitPanel } from "./GitPanel";
+import { SessionLauncher } from "./SessionLauncher";
+import { WebPageView } from "./WebPageView";
+import { api } from "../lib/api";
+import { DesktopUpdateBanner } from "./DesktopUpdateBanner";
+import { CloseTabModal } from "./CloseTabModal";
 
 interface ProjectViewProps {
   projectId: string;
@@ -41,7 +61,7 @@ interface WebPageInstance {
   url: string;
 }
 
-type ActiveMode = 'terminal' | 'explorer' | 'events' | 'git';
+type ActiveMode = "terminal" | "explorer" | "events" | "git";
 
 interface PersistedState {
   activeMode: ActiveMode;
@@ -66,7 +86,11 @@ function loadPersistedState(projectId: string): PersistedState | null {
     const raw = localStorage.getItem(storageKey(projectId));
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (parsed && parsed.activeMode && Array.isArray(parsed.explorerInstances)) {
+    if (
+      parsed &&
+      parsed.activeMode &&
+      Array.isArray(parsed.explorerInstances)
+    ) {
       return parsed;
     }
   } catch {}
@@ -96,17 +120,26 @@ export function cleanupProjectStorage(projectId: string) {
 }
 
 const sidebarButtons = [
-  { id: 'terminal' as const, icon: Monitor, title: 'Terminal' },
-  { id: 'explorer' as const, icon: FolderTree, title: 'File Explorer' },
-  { id: 'git' as const, icon: GitBranch, title: 'Source Control' },
+  { id: "terminal" as const, icon: Monitor, title: "Terminal" },
+  { id: "explorer" as const, icon: FolderTree, title: "File Explorer" },
+  { id: "git" as const, icon: GitBranch, title: "Source Control" },
 ] as const;
 
-export function ProjectView({ projectId, projectPath, projectName: _projectName, active = true, terminalsSuspended = false, focusSessionId, onFocusSessionHandled, onHiddenSessionsChange }: ProjectViewProps) {
+export function ProjectView({
+  projectId,
+  projectPath,
+  projectName: _projectName,
+  active = true,
+  terminalsSuspended = false,
+  focusSessionId,
+  onFocusSessionHandled,
+  onHiddenSessionsChange,
+}: ProjectViewProps) {
   const queryClient = useQueryClient();
 
   // Fetch project data for SessionLauncher
   const { data: projectsData } = useQuery({
-    queryKey: ['projects'],
+    queryKey: ["projects"],
     queryFn: () => api.projects.list(),
   });
   const project = projectsData?.projects.find((p) => p.id === projectId);
@@ -114,14 +147,19 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
   // Fetch running sessions for this project
   // No refetchInterval — driven by WebSocket invalidation (websocket.ts).
   const { data: sessionsData } = useQuery({
-    queryKey: ['sessions'],
+    queryKey: ["sessions"],
     queryFn: () => api.sessions.list(),
   });
   const projectSessions = useMemo(
-    () => (sessionsData?.sessions || []).filter(
-      (s) => s.project_id === projectId && (s.status === 'running' || s.status === 'detached' || s.status === 'pending')
-    ),
-    [sessionsData, projectId]
+    () =>
+      (sessionsData?.sessions || []).filter(
+        (s) =>
+          s.project_id === projectId &&
+          (s.status === "running" ||
+            s.status === "detached" ||
+            s.status === "pending"),
+      ),
+    [sessionsData, projectId],
   );
 
   // Initialize from persisted state or defaults
@@ -130,44 +168,51 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
     if (saved) {
       for (const e of saved.explorerInstances) {
         const match = e.id.match(/-explorer-(\d+)$/);
-        if (match) nextExplorerSeq = Math.max(nextExplorerSeq, parseInt(match[1]) + 1);
+        if (match)
+          nextExplorerSeq = Math.max(nextExplorerSeq, parseInt(match[1]) + 1);
       }
     }
     return saved;
   });
 
   const [activeMode, setActiveMode] = useState<ActiveMode>(
-    initialized?.activeMode ?? 'terminal'
+    initialized?.activeMode ?? "terminal",
   );
 
   // Discover external hivemind sessions available for adoption (on-demand only, no polling)
   const { data: discoverableData, refetch: refetchDiscoverable } = useQuery({
-    queryKey: ['discoverable-sessions', projectPath],
+    queryKey: ["discoverable-sessions", projectPath],
     queryFn: () => api.sessions.discoverable(projectPath),
     enabled: false, // on-demand only — triggered by user clicking "Scan"
   });
   const discoverableSessions = discoverableData?.sessions || [];
 
   // Terminal instances — restored from persisted state + synced with server sessions
-  const [terminalInstances, setTerminalInstances] = useState<TerminalInstance[]>(
-    initialized?.terminalInstances ?? []
-  );
+  const [terminalInstances, setTerminalInstances] = useState<
+    TerminalInstance[]
+  >(initialized?.terminalInstances ?? []);
   const [activeTerminalId, setActiveTerminalId] = useState<string | null>(
-    initialized?.activeTerminalId ?? null
+    initialized?.activeTerminalId ?? null,
   );
   const [showLauncher, setShowLauncher] = useState(
-    initialized?.showLauncher ?? true
+    initialized?.showLauncher ?? true,
   );
   const [showAllTerminals, setShowAllTerminals] = useState(false);
-  const [expandedTerminalId, setExpandedTerminalId] = useState<string | null>(null);
+  const [expandedTerminalId, setExpandedTerminalId] = useState<string | null>(
+    null,
+  );
   const [gridFocusedId, setGridFocusedId] = useState<string | null>(null);
   const [gridColumns, setGridColumns] = useState(() => {
-    const saved = localStorage.getItem(`octoally-project-grid-cols-${projectId}`);
+    const saved = localStorage.getItem(
+      `octoally-project-grid-cols-${projectId}`,
+    );
     return saved ? Math.min(10, Math.max(1, parseInt(saved, 10) || 3)) : 3;
   });
-  const [gridRows, setGridRows] = useState<number | 'auto'>(() => {
-    const saved = localStorage.getItem(`octoally-project-grid-rows-${projectId}`);
-    if (!saved || saved === 'auto') return 'auto';
+  const [gridRows, setGridRows] = useState<number | "auto">(() => {
+    const saved = localStorage.getItem(
+      `octoally-project-grid-rows-${projectId}`,
+    );
+    if (!saved || saved === "auto") return "auto";
     return Math.min(6, Math.max(1, parseInt(saved, 10) || 2));
   });
   const [gridColsOpen, setGridColsOpen] = useState(false);
@@ -184,17 +229,17 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
 
   // Web page instances
   const [webPageInstances, setWebPageInstances] = useState<WebPageInstance[]>(
-    initialized?.webPageInstances ?? []
+    initialized?.webPageInstances ?? [],
   );
   const [activeWebPageId, setActiveWebPageId] = useState<string | null>(
-    initialized?.activeWebPageId ?? null
+    initialized?.activeWebPageId ?? null,
   );
 
   // Close-tab confirmation modal state
   const [closeConfirm, setCloseConfirm] = useState<{
     id: string;
     label: string;
-    type: 'hivemind' | 'terminal' | 'agent';
+    type: "hivemind" | "terminal" | "agent";
   } | null>(null);
 
   // Dismiss grid view and expanded modal when the project tab loses focus
@@ -229,8 +274,8 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
     // Prune closed IDs that are no longer alive on the server (kill completed)
     const allAliveIds = new Set(
       (sessionsData?.sessions || [])
-        .filter((s: any) => s.status === 'running' || s.status === 'detached')
-        .map((s: any) => s.id)
+        .filter((s: any) => s.status === "running" || s.status === "detached")
+        .map((s: any) => s.id),
     );
     let pruned = false;
     for (const id of closedSessionIds.current) {
@@ -248,12 +293,16 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
       const existingIds = new Set(prev.map((t) => t.id));
       const aliveIds = new Set(projectSessions.map((s) => s.id));
       // Build set of all session IDs the server knows about (any status)
-      const allServerIds = new Set((sessionsData?.sessions || []).map((s: any) => s.id));
+      const allServerIds = new Set(
+        (sessionsData?.sessions || []).map((s: any) => s.id),
+      );
 
       // Remove sessions only if the server explicitly reports them as dead
       // (completed/failed/cancelled). Keep sessions the server hasn't seen yet
       // (just created locally, not in the poll response yet).
-      const filtered = prev.filter((t) => aliveIds.has(t.id) || !allServerIds.has(t.id));
+      const filtered = prev.filter(
+        (t) => aliveIds.has(t.id) || !allServerIds.has(t.id),
+      );
 
       // Relabel existing instances based on actual session data.
       // This fixes tabs restored from localStorage with stale labels.
@@ -263,10 +312,14 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
       const relabeled = filtered.map((t) => {
         const session = sessionById.get(t.id);
         if (!session) return t; // not yet known — keep as-is
-        const isTerminal = session.task === 'Terminal';
-        const isAgent = session.task.startsWith('Agent (');
-        const prefix = isTerminal ? 'Terminal' : isAgent ? 'Agent' : 'Hivemind';
-        const num = isTerminal ? ++terminalCount : isAgent ? ++agentCount : ++hivemindCount;
+        const isTerminal = session.task === "Terminal";
+        const isAgent = session.task.startsWith("Agent (");
+        const prefix = isTerminal ? "Terminal" : isAgent ? "Agent" : "Hivemind";
+        const num = isTerminal
+          ? ++terminalCount
+          : isAgent
+            ? ++agentCount
+            : ++hivemindCount;
         const newLabel = `${prefix} ${num}`;
         return newLabel !== t.label ? { ...t, label: newLabel } : t;
       });
@@ -275,24 +328,40 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
       const newTerminals: TerminalInstance[] = [];
       for (const s of projectSessions) {
         if (!existingIds.has(s.id) && !closedSessionIds.current.has(s.id)) {
-          const isTerminal = s.task === 'Terminal';
-          const isAgent = s.task.startsWith('Agent (');
-          const prefix = isTerminal ? 'Terminal' : isAgent ? 'Agent' : 'Hivemind';
-          const num = isTerminal ? ++terminalCount : isAgent ? ++agentCount : ++hivemindCount;
+          const isTerminal = s.task === "Terminal";
+          const isAgent = s.task.startsWith("Agent (");
+          const prefix = isTerminal
+            ? "Terminal"
+            : isAgent
+              ? "Agent"
+              : "Hivemind";
+          const num = isTerminal
+            ? ++terminalCount
+            : isAgent
+              ? ++agentCount
+              : ++hivemindCount;
           newTerminals.push({ id: s.id, label: `${prefix} ${num}` });
         }
       }
 
       const result = [...relabeled, ...newTerminals];
       // Sort: hivemind first, then agent, then terminal
-      const sortOrder = (label: string) => label.startsWith('Hivemind') ? 0 : label.startsWith('Agent') ? 1 : 2;
+      const sortOrder = (label: string) =>
+        label.startsWith("Hivemind") ? 0 : label.startsWith("Agent") ? 1 : 2;
       result.sort((a, b) => {
         const diff = sortOrder(a.label) - sortOrder(b.label);
         if (diff !== 0) return diff;
         return 0; // preserve relative order within each group
       });
       // Check if anything actually changed
-      if (result.length === prev.length && newTerminals.length === 0 && result.every((t, i) => t.id === prev[i]?.id && t.label === prev[i]?.label)) return prev;
+      if (
+        result.length === prev.length &&
+        newTerminals.length === 0 &&
+        result.every(
+          (t, i) => t.id === prev[i]?.id && t.label === prev[i]?.label,
+        )
+      )
+        return prev;
 
       return result;
     });
@@ -301,7 +370,12 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
   // If terminals appeared and launcher was showing, switch to terminal
   // (but not if the user explicitly navigated to the Home/launcher tab)
   useEffect(() => {
-    if (terminalInstances.length > 0 && !activeTerminalId && !activeWebPageId && !showLauncher) {
+    if (
+      terminalInstances.length > 0 &&
+      !activeTerminalId &&
+      !activeWebPageId &&
+      !showLauncher
+    ) {
       setActiveTerminalId(terminalInstances[0].id);
     }
   }, [terminalInstances, activeTerminalId, activeWebPageId, showLauncher]);
@@ -311,7 +385,7 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
     if (!focusSessionId) return;
 
     // Voice command: show all terminals/hiveminds in grid
-    if (focusSessionId === '__voice_show_all') {
+    if (focusSessionId === "__voice_show_all") {
       setShowAllTerminals(true);
       setExpandedTerminalId(null);
       onFocusSessionHandled?.();
@@ -319,64 +393,85 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
     }
 
     // Voice command: refresh active terminal display
-    if (focusSessionId === '__voice_refresh_tab') {
+    if (focusSessionId === "__voice_refresh_tab") {
       if (activeTerminalId) {
-        window.dispatchEvent(new CustomEvent('octoally:refresh-terminal', {
-          detail: { sessionId: activeTerminalId },
-        }));
+        window.dispatchEvent(
+          new CustomEvent("octoally:refresh-terminal", {
+            detail: { sessionId: activeTerminalId },
+          }),
+        );
       }
       onFocusSessionHandled?.();
       return;
     }
 
     // Voice command / quick-launch: create new terminal, hivemind, or agent
-    const createMatch = focusSessionId.match(/^__voice_create_(terminal|hivemind|agent)$/);
+    const createMatch = focusSessionId.match(
+      /^__voice_create_(terminal|hivemind|agent)$/,
+    );
     if (createMatch) {
-      const type = createMatch[1] as 'terminal' | 'hivemind' | 'agent';
+      const type = createMatch[1] as "terminal" | "hivemind" | "agent";
       console.log(`[QuickLaunch] Creating new ${type}`);
-      if (type === 'terminal') {
-        api.sessions.create({ project_path: projectPath, mode: 'terminal', project_id: projectId })
+      if (type === "terminal") {
+        api.sessions
+          .create({
+            project_path: projectPath,
+            mode: "terminal",
+            project_id: projectId,
+          })
           .then((data) => {
             if (data.session?.id) {
-              handleSessionCreated(data.session.id, undefined, 'terminal');
-              queryClient.invalidateQueries({ queryKey: ['sessions'] });
+              handleSessionCreated(data.session.id, undefined, "terminal");
+              queryClient.invalidateQueries({ queryKey: ["sessions"] });
             }
           })
-          .catch((err) => console.error(`[QuickLaunch] Failed to create terminal:`, err));
+          .catch((err) =>
+            console.error(`[QuickLaunch] Failed to create terminal:`, err),
+          );
       } else {
-        const cfPrompt = (project?.ruflo_prompt ?? '').trim();
-        const defaultTask = 'Start up and ask me what I want you to do and NOTHING ELSE';
+        const cfPrompt = (project?.ruflo_prompt ?? "").trim();
+        const defaultTask =
+          "Start up and ask me what I want you to do and NOTHING ELSE";
         const task = cfPrompt
           ? `${defaultTask}\n\n---\nAdditional Instructions:\n${cfPrompt}`
           : defaultTask;
-        api.sessions.create({
-          project_path: projectPath,
-          task,
-          mode: type === 'agent' ? 'agent' : 'hivemind',
-          agent_type: type === 'agent' ? 'coder' : undefined,
-          project_id: projectId,
-        })
+        api.sessions
+          .create({
+            project_path: projectPath,
+            task,
+            mode: type === "agent" ? "agent" : "hivemind",
+            agent_type: type === "agent" ? "coder" : undefined,
+            project_id: projectId,
+          })
           .then((data) => {
             if (data.session?.id) {
-              handleSessionCreated(data.session.id, undefined, 'hivemind');
-              queryClient.invalidateQueries({ queryKey: ['sessions'] });
+              handleSessionCreated(data.session.id, undefined, "hivemind");
+              queryClient.invalidateQueries({ queryKey: ["sessions"] });
             }
           })
-          .catch((err) => console.error(`[QuickLaunch] Failed to create ${type}:`, err));
+          .catch((err) =>
+            console.error(`[QuickLaunch] Failed to create ${type}:`, err),
+          );
       }
       onFocusSessionHandled?.();
       return;
     }
 
     // Voice command: close active terminal or hivemind
-    const closeMatch = focusSessionId.match(/^__voice_close_(terminal|hivemind)$/);
+    const closeMatch = focusSessionId.match(
+      /^__voice_close_(terminal|hivemind)$/,
+    );
     if (closeMatch) {
       const type = closeMatch[1];
-      const targetLabel = type === 'hivemind' ? 'Hivemind' : 'Terminal';
+      const targetLabel = type === "hivemind" ? "Hivemind" : "Terminal";
       // Close the currently active session if it matches the type
-      const activeInst = terminalInstances.find((t) => t.id === activeTerminalId);
+      const activeInst = terminalInstances.find(
+        (t) => t.id === activeTerminalId,
+      );
       if (activeInst && activeInst.label.startsWith(targetLabel)) {
-        console.log(`[STT] Closing active ${type}: ${activeInst.label} (${activeInst.id})`);
+        console.log(
+          `[STT] Closing active ${type}: ${activeInst.label} (${activeInst.id})`,
+        );
         closeTerminal(activeInst.id);
       } else {
         console.warn(`[STT] Active session is not a ${type}, cannot close`);
@@ -386,27 +481,35 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
     }
 
     // Voice command: __voice_terminal_N or __voice_hivemind_N
-    const voiceMatch = focusSessionId.match(/^__voice_(terminal|hivemind)_(\d+)$/);
+    const voiceMatch = focusSessionId.match(
+      /^__voice_(terminal|hivemind)_(\d+)$/,
+    );
     if (voiceMatch) {
       const [, type, numStr] = voiceMatch;
       const num = parseInt(numStr, 10);
       // Find the Nth terminal or hivemind by label ordering
-      const targetLabel = type === 'hivemind' ? 'Hivemind' : 'Terminal';
+      const targetLabel = type === "hivemind" ? "Hivemind" : "Terminal";
       const matching = terminalInstances.filter((t) =>
-        t.label.startsWith(targetLabel)
+        t.label.startsWith(targetLabel),
       );
-      console.log(`[STT] Voice focus: type=${type} num=${num} targetLabel=${targetLabel}`,
-        'all instances:', terminalInstances.map(t => `${t.label} (${t.id})`),
-        'matching:', matching.map(t => `${t.label} (${t.id})`));
+      console.log(
+        `[STT] Voice focus: type=${type} num=${num} targetLabel=${targetLabel}`,
+        "all instances:",
+        terminalInstances.map((t) => `${t.label} (${t.id})`),
+        "matching:",
+        matching.map((t) => `${t.label} (${t.id})`),
+      );
       const target = matching[num - 1]; // 1-indexed
       if (target) {
         console.log(`[STT] Switching to: ${target.label} (${target.id})`);
         setActiveTerminalId(target.id);
         setShowLauncher(false);
         setShowAllTerminals(false);
-        setActiveMode('terminal');
+        setActiveMode("terminal");
       } else {
-        console.warn(`[STT] No ${targetLabel} #${num} found. Have ${matching.length} matching instances.`);
+        console.warn(
+          `[STT] No ${targetLabel} #${num} found. Have ${matching.length} matching instances.`,
+        );
       }
       onFocusSessionHandled?.();
       return;
@@ -418,23 +521,25 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
       setActiveWebPageId(null);
       setShowLauncher(false);
       setShowAllTerminals(false);
-      setActiveMode('terminal');
+      setActiveMode("terminal");
       onFocusSessionHandled?.();
       focusTerminalById(focusSessionId);
     }
   }, [focusSessionId, terminalInstances]);
 
   // Explorer instances
-  const [explorerInstances, setExplorerInstances] = useState<ExplorerInstance[]>(() => {
+  const [explorerInstances, setExplorerInstances] = useState<
+    ExplorerInstance[]
+  >(() => {
     if (initialized?.explorerInstances?.length) {
       return initialized.explorerInstances;
     }
     const id = `${projectId}-explorer-${nextExplorerSeq++}`;
-    return [{ id, label: 'Explorer 1' }];
+    return [{ id, label: "Explorer 1" }];
   });
 
   const [activeExplorerId, setActiveExplorerId] = useState(
-    initialized?.activeExplorerId ?? explorerInstances[0].id
+    initialized?.activeExplorerId ?? explorerInstances[0].id,
   );
 
   // Persist state whenever it changes
@@ -449,20 +554,34 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
       activeWebPageId,
       showLauncher,
     });
-  }, [projectId, activeMode, explorerInstances, activeExplorerId, terminalInstances, activeTerminalId, webPageInstances, activeWebPageId, showLauncher]);
+  }, [
+    projectId,
+    activeMode,
+    explorerInstances,
+    activeExplorerId,
+    terminalInstances,
+    activeTerminalId,
+    webPageInstances,
+    activeWebPageId,
+    showLauncher,
+  ]);
 
   function handleOpenVSCode() {
     api.files.openVSCode(projectPath).catch((err) => {
-      console.error('Failed to open VS Code:', err);
+      console.error("Failed to open VS Code:", err);
     });
   }
 
-  function handleSessionCreated(sessionId: string, _projectName?: string, mode?: 'hivemind' | 'terminal') {
-    const isTerminal = mode === 'terminal';
+  function handleSessionCreated(
+    sessionId: string,
+    _projectName?: string,
+    mode?: "hivemind" | "terminal",
+  ) {
+    const isTerminal = mode === "terminal";
     setTerminalInstances((prev) => {
       if (prev.some((t) => t.id === sessionId)) return prev;
-      const prefix = isTerminal ? 'Terminal' : 'Hivemind';
-      const count = prev.filter(t => t.label.startsWith(prefix)).length + 1;
+      const prefix = isTerminal ? "Terminal" : "Hivemind";
+      const count = prev.filter((t) => t.label.startsWith(prefix)).length + 1;
       return [...prev, { id: sessionId, label: `${prefix} ${count}` }];
     });
     setActiveTerminalId(sessionId);
@@ -483,9 +602,8 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
     if (closedSessionIds.current.size === 0) return [];
     // Only show hidden sessions for this project, and exclude sessions with open tabs
     const openTabIds = new Set(terminalInstances.map((t) => t.id));
-    return projectSessions.filter((s: any) =>
-      closedSessionIds.current.has(s.id) &&
-      !openTabIds.has(s.id)
+    return projectSessions.filter(
+      (s: any) => closedSessionIds.current.has(s.id) && !openTabIds.has(s.id),
     );
   }, [projectSessions, closedIdsVersion, terminalInstances]);
 
@@ -499,12 +617,13 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
     if (session) {
       setTerminalInstances((prev) => {
         if (prev.some((t) => t.id === id)) return prev;
-        const isTerminal = session.task === 'Terminal';
-        const isAgent = session.task?.startsWith('Agent (');
-        const prefix = isTerminal ? 'Terminal' : isAgent ? 'Agent' : 'Hivemind';
+        const isTerminal = session.task === "Terminal";
+        const isAgent = session.task?.startsWith("Agent (");
+        const prefix = isTerminal ? "Terminal" : isAgent ? "Agent" : "Hivemind";
         const count = prev.filter((t) => t.label.startsWith(prefix)).length + 1;
         const result = [...prev, { id, label: `${prefix} ${count}` }];
-        const order = (l: string) => l.startsWith('Hivemind') ? 0 : l.startsWith('Agent') ? 1 : 2;
+        const order = (l: string) =>
+          l.startsWith("Hivemind") ? 0 : l.startsWith("Agent") ? 1 : 2;
         result.sort((a, b) => order(a.label) - order(b.label));
         return result;
       });
@@ -513,7 +632,7 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
       setShowAllTerminals(false);
     }
 
-    queryClient.invalidateQueries({ queryKey: ['sessions'] });
+    queryClient.invalidateQueries({ queryKey: ["sessions"] });
     setShowAdoptMenu(false);
   }
 
@@ -527,21 +646,26 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
       let updated = [...prev];
       for (const id of ids) {
         if (updated.some((t) => t.id === id)) continue;
-        const session = allSessions.find((s: any) => s.id === id && (s.status === 'running' || s.status === 'detached'));
+        const session = allSessions.find(
+          (s: any) =>
+            s.id === id && (s.status === "running" || s.status === "detached"),
+        );
         if (!session) continue;
-        const isTerminal = session.task === 'Terminal';
-        const isAgent = session.task?.startsWith('Agent (');
-        const prefix = isTerminal ? 'Terminal' : isAgent ? 'Agent' : 'Hivemind';
-        const count = updated.filter((t) => t.label.startsWith(prefix)).length + 1;
+        const isTerminal = session.task === "Terminal";
+        const isAgent = session.task?.startsWith("Agent (");
+        const prefix = isTerminal ? "Terminal" : isAgent ? "Agent" : "Hivemind";
+        const count =
+          updated.filter((t) => t.label.startsWith(prefix)).length + 1;
         updated.push({ id, label: `${prefix} ${count}` });
       }
-      const order = (l: string) => l.startsWith('Hivemind') ? 0 : l.startsWith('Agent') ? 1 : 2;
+      const order = (l: string) =>
+        l.startsWith("Hivemind") ? 0 : l.startsWith("Agent") ? 1 : 2;
       updated.sort((a, b) => order(a.label) - order(b.label));
       return updated;
     });
 
     setShowLauncher(false);
-    queryClient.invalidateQueries({ queryKey: ['sessions'] });
+    queryClient.invalidateQueries({ queryKey: ["sessions"] });
     setShowAdoptMenu(false);
   }
 
@@ -558,8 +682,8 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
       if (adoptDropdownRef.current?.contains(target)) return;
       setShowAdoptMenu(false);
     }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
   }, [showAdoptMenu]);
 
   async function handleAdoptSession(socketPath: string) {
@@ -575,27 +699,31 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
 
       // Refresh sessions data so projectSessions includes the re-adopted session
       // (needed for hideCursor prop which enables the force-resize redraw trick)
-      await queryClient.invalidateQueries({ queryKey: ['sessions'] });
-      queryClient.invalidateQueries({ queryKey: ['discoverable-sessions'] });
+      await queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      queryClient.invalidateQueries({ queryKey: ["discoverable-sessions"] });
 
       // If the tab already exists (re-adopting a popped-out session),
       // force remount the Terminal component to reset its WebSocket state
       const existing = terminalInstances.find((t) => t.id === sid);
       if (existing) {
         setTerminalInstances((prev) =>
-          prev.map((t) => (t.id === sid ? { ...t, id: sid + '_readopting' } : t))
+          prev.map((t) =>
+            t.id === sid ? { ...t, id: sid + "_readopting" } : t,
+          ),
         );
         setTimeout(() => {
           setTerminalInstances((prev) =>
-            prev.map((t) => (t.id === sid + '_readopting' ? { ...t, id: sid } : t))
+            prev.map((t) =>
+              t.id === sid + "_readopting" ? { ...t, id: sid } : t,
+            ),
           );
           setActiveTerminalId(sid);
         }, 100);
       } else {
-        handleSessionCreated(sid, undefined, 'hivemind');
+        handleSessionCreated(sid, undefined, "hivemind");
       }
     } catch (err) {
-      console.error('Failed to adopt session:', err);
+      console.error("Failed to adopt session:", err);
     } finally {
       adoptingRef.current = false;
       setClosedIdsVersion((v) => v + 1); // force recompute now that adopt is done
@@ -604,9 +732,10 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
 
   function closeTerminal(id: string) {
     closedSessionIds.current.add(id);
-    api.sessions.kill(id)
-      .then(() => queryClient.invalidateQueries({ queryKey: ['sessions'] }))
-      .catch((err) => console.error('Failed to kill session:', id, err));
+    api.sessions
+      .kill(id)
+      .then(() => queryClient.invalidateQueries({ queryKey: ["sessions"] }))
+      .catch((err) => console.error("Failed to kill session:", id, err));
     setTerminalInstances((prev) => prev.filter((t) => t.id !== id));
     if (activeTerminalId === id) {
       const remaining = terminalInstances.filter((t) => t.id !== id);
@@ -634,20 +763,26 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
         setShowLauncher(true);
       }
     }
-    queryClient.invalidateQueries({ queryKey: ['sessions'] });
+    queryClient.invalidateQueries({ queryKey: ["sessions"] });
   }
 
   async function reconnectTerminal(oldId: string) {
     try {
-      const { session: oldSession } = await api.sessions.get(oldId).catch(() => ({ session: null }));
-      if (oldSession?.status === 'detached') {
+      const { session: oldSession } = await api.sessions
+        .get(oldId)
+        .catch(() => ({ session: null }));
+      if (oldSession?.status === "detached") {
         await api.sessions.reconnect(oldId);
         setTerminalInstances((prev) =>
-          prev.map((t) => (t.id === oldId ? { ...t, id: oldId + '_reconnecting' } : t))
+          prev.map((t) =>
+            t.id === oldId ? { ...t, id: oldId + "_reconnecting" } : t,
+          ),
         );
         setTimeout(() => {
           setTerminalInstances((prev) =>
-            prev.map((t) => (t.id === oldId + '_reconnecting' ? { ...t, id: oldId } : t))
+            prev.map((t) =>
+              t.id === oldId + "_reconnecting" ? { ...t, id: oldId } : t,
+            ),
           );
           setActiveTerminalId(oldId);
         }, 50);
@@ -656,15 +791,15 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
 
       const result = await api.sessions.create({
         project_path: projectPath,
-        task: 'Interactive ruflo session',
+        task: "Interactive ruflo session",
       });
       const newId = result.session.id;
       setTerminalInstances((prev) =>
-        prev.map((t) => (t.id === oldId ? { ...t, id: newId } : t))
+        prev.map((t) => (t.id === oldId ? { ...t, id: newId } : t)),
       );
       setActiveTerminalId(newId);
     } catch (err) {
-      console.error('Failed to reconnect terminal:', err);
+      console.error("Failed to reconnect terminal:", err);
     }
   }
 
@@ -679,7 +814,11 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
     if (explorerInstances.length <= 1) return;
     setExplorerInstances((prev) => prev.filter((e) => e.id !== id));
     if (activeExplorerId === id) {
-      setActiveExplorerId(explorerInstances[0].id === id ? explorerInstances[1]?.id : explorerInstances[0].id);
+      setActiveExplorerId(
+        explorerInstances[0].id === id
+          ? explorerInstances[1]?.id
+          : explorerInstances[0].id,
+      );
     }
   }
 
@@ -713,9 +852,11 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
   // Focus a terminal's xterm textarea after switching views
   function focusTerminalById(sessionId: string) {
     setTimeout(() => {
-      window.dispatchEvent(new CustomEvent('octoally:focus-terminal', {
-        detail: { sessionId },
-      }));
+      window.dispatchEvent(
+        new CustomEvent("octoally:focus-terminal", {
+          detail: { sessionId },
+        }),
+      );
     }, 100);
   }
 
@@ -725,7 +866,9 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
 
   // Cross-tab refresh coordination
   const [gitSavedFile, setGitSavedFile] = useState<string | null>(null);
-  const [explorerSavedFile, setExplorerSavedFile] = useState<string | null>(null);
+  const [explorerSavedFile, setExplorerSavedFile] = useState<string | null>(
+    null,
+  );
 
   const handleGitFileSaved = useCallback((filePath: string) => {
     setGitSavedFile(filePath);
@@ -737,35 +880,50 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
 
   const prevMode = useRef(activeMode);
   useEffect(() => {
-    if (activeMode === 'git' && prevMode.current !== 'git' && explorerSavedFile) {
+    if (
+      activeMode === "git" &&
+      prevMode.current !== "git" &&
+      explorerSavedFile
+    ) {
       setExplorerSavedFile(null);
     }
     prevMode.current = activeMode;
   }, [activeMode, explorerSavedFile]);
 
   // Sub-tab bar for terminal and explorer modes
-  const showSubTabs = activeMode === 'terminal' || activeMode === 'explorer';
+  const showSubTabs = activeMode === "terminal" || activeMode === "explorer";
 
-  const gridMode = showAllTerminals && !showLauncher && (terminalInstances.length + hiddenSessions.length) >= 2;
+  const gridMode =
+    showAllTerminals &&
+    !showLauncher &&
+    terminalInstances.length + hiddenSessions.length >= 2;
 
   // Persist grid preferences
   useEffect(() => {
-    localStorage.setItem(`octoally-project-grid-cols-${projectId}`, String(gridColumns));
+    localStorage.setItem(
+      `octoally-project-grid-cols-${projectId}`,
+      String(gridColumns),
+    );
   }, [gridColumns, projectId]);
   useEffect(() => {
-    localStorage.setItem(`octoally-project-grid-rows-${projectId}`, String(gridRows));
+    localStorage.setItem(
+      `octoally-project-grid-rows-${projectId}`,
+      String(gridRows),
+    );
   }, [gridRows, projectId]);
 
   // Calculate grid card height
   useEffect(() => {
     if (!gridMode) return;
     function updateHeight() {
-      if (gridRows !== 'auto') {
+      if (gridRows !== "auto") {
         if (!gridContainerRef.current) return;
         const containerHeight = gridContainerRef.current.clientHeight;
         const gap = 16;
         const padding = 32;
-        const height = Math.round((containerHeight - padding - gap * (gridRows - 1)) / gridRows);
+        const height = Math.round(
+          (containerHeight - padding - gap * (gridRows - 1)) / gridRows,
+        );
         setGridCardHeight(Math.max(150, height));
       } else {
         if (!gridInnerRef.current) return;
@@ -777,15 +935,19 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
       }
     }
     updateHeight();
-    window.addEventListener('resize', updateHeight);
-    return () => window.removeEventListener('resize', updateHeight);
+    window.addEventListener("resize", updateHeight);
+    return () => window.removeEventListener("resize", updateHeight);
   }, [gridColumns, gridRows, gridMode]);
 
   // Force terminal refit on grid mount — terminals were fitted to single-view
   // full width and need to refit to the narrower grid card width.
   // Dispatch refresh-terminal event for each terminal after layout settles.
   useEffect(() => {
-    if (!gridMode) { setGridMounted(false); setGridShowAll(false); return; }
+    if (!gridMode) {
+      setGridMounted(false);
+      setGridShowAll(false);
+      return;
+    }
     const t1 = setTimeout(() => {
       setGridMounted(true);
     }, 100);
@@ -793,24 +955,32 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
     // Trigger refresh after layout is fully settled — same as clicking refresh button
     const t3 = setTimeout(() => {
       for (const term of terminalInstances) {
-        window.dispatchEvent(new CustomEvent('octoally:refresh-terminal', {
-          detail: { sessionId: term.id },
-        }));
+        window.dispatchEvent(
+          new CustomEvent("octoally:refresh-terminal", {
+            detail: { sessionId: term.id },
+          }),
+        );
       }
     }, 500);
-    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
   }, [gridMode, terminalInstances]);
 
   // Shown vs hidden sessions in grid — hiddenSessions are sessions with closed tabs
   // that are still running but not in terminalInstances
   const hiddenAsInstances: TerminalInstance[] = hiddenSessions.map((s) => {
-    const isTerminal = s.task === 'Terminal';
-    const isAgent = s.task?.startsWith('Agent (');
-    const prefix = isTerminal ? 'Terminal' : isAgent ? 'Agent' : 'Hivemind';
+    const isTerminal = s.task === "Terminal";
+    const isAgent = s.task?.startsWith("Agent (");
+    const prefix = isTerminal ? "Terminal" : isAgent ? "Agent" : "Hivemind";
     return { id: s.id, label: `${prefix} (hidden)` };
   });
   const allGridInstances = [...terminalInstances, ...hiddenAsInstances];
-  const gridVisibleInstances = gridShowAll ? allGridInstances : terminalInstances;
+  const gridVisibleInstances = gridShowAll
+    ? allGridInstances
+    : terminalInstances;
   const gridHiddenCount = hiddenSessions.length;
 
   return (
@@ -820,8 +990,8 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
         className="flex flex-col items-center py-2 gap-1 shrink-0"
         style={{
           width: 48,
-          background: 'var(--bg-secondary)',
-          borderRight: '1px solid var(--border)',
+          background: "var(--bg-secondary)",
+          borderRight: "1px solid var(--border)",
         }}
       >
         {sidebarButtons.map(({ id, icon: Icon, title }) => {
@@ -835,8 +1005,8 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
               style={{
                 width: 36,
                 height: 36,
-                background: isActive ? 'var(--bg-tertiary)' : 'transparent',
-                color: isActive ? 'var(--accent)' : 'var(--text-secondary)',
+                background: isActive ? "var(--bg-tertiary)" : "transparent",
+                color: isActive ? "var(--accent)" : "var(--text-secondary)",
               }}
             >
               <Icon className="w-5 h-5" />
@@ -852,8 +1022,8 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
           style={{
             width: 36,
             height: 36,
-            background: 'transparent',
-            color: 'var(--text-secondary)',
+            background: "transparent",
+            color: "var(--text-secondary)",
           }}
         >
           <Code2 className="w-5 h-5" />
@@ -870,19 +1040,27 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
           <div
             className="flex items-center gap-0.5 px-2 py-1 shrink-0 overflow-x-auto"
             style={{
-              borderBottom: '1px solid var(--border)',
-              background: 'var(--bg-secondary)',
+              borderBottom: "1px solid var(--border)",
+              background: "var(--bg-secondary)",
             }}
           >
-            {activeMode === 'terminal' && (
+            {activeMode === "terminal" && (
               <>
                 {/* Home tab — always first */}
                 <button
-                  onClick={() => { setShowLauncher(true); setShowAllTerminals(false); setActiveWebPageId(null); }}
+                  onClick={() => {
+                    setShowLauncher(true);
+                    setShowAllTerminals(false);
+                    setActiveWebPageId(null);
+                  }}
                   className="flex items-center gap-1.5 px-3 py-1 rounded-md shrink-0 transition-colors text-xs font-medium"
                   style={{
-                    color: showLauncher ? 'var(--accent)' : 'var(--text-secondary)',
-                    background: showLauncher ? 'var(--bg-tertiary)' : 'transparent',
+                    color: showLauncher
+                      ? "var(--accent)"
+                      : "var(--text-secondary)",
+                    background: showLauncher
+                      ? "var(--bg-tertiary)"
+                      : "transparent",
                   }}
                 >
                   <Home className="w-3 h-3" />
@@ -891,12 +1069,20 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
 
                 {/* Terminal session sub-tabs */}
                 {terminalInstances.map((inst) => {
-                  const isActive = !showLauncher && !showAllTerminals && !activeWebPageId && inst.id === activeTerminalId;
+                  const isActive =
+                    !showLauncher &&
+                    !showAllTerminals &&
+                    !activeWebPageId &&
+                    inst.id === activeTerminalId;
                   return (
                     <div
                       key={inst.id}
                       className="flex items-center gap-0.5 rounded-md shrink-0 group"
-                      style={{ background: isActive ? 'var(--bg-tertiary)' : 'transparent' }}
+                      style={{
+                        background: isActive
+                          ? "var(--bg-tertiary)"
+                          : "transparent",
+                      }}
                     >
                       <button
                         onClick={() => {
@@ -908,27 +1094,46 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
                           focusTerminalById(inst.id);
                         }}
                         className="flex items-center gap-1.5 pl-3 pr-1 py-1 text-xs font-medium transition-colors"
-                        style={{ color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)' }}
+                        style={{
+                          color: isActive
+                            ? "var(--text-primary)"
+                            : "var(--text-secondary)",
+                        }}
                       >
-                        {inst.label.startsWith('Terminal') ? (
-                          <TerminalSquare className="w-3 h-3 shrink-0" style={{ color: '#f59e0b' }} />
-                        ) : inst.label.startsWith('Agent') ? (
-                          <Bot className="w-3 h-3 shrink-0" style={{ color: '#ef4444' }} />
+                        {inst.label.startsWith("Terminal") ? (
+                          <TerminalSquare
+                            className="w-3 h-3 shrink-0"
+                            style={{ color: "#f59e0b" }}
+                          />
+                        ) : inst.label.startsWith("Agent") ? (
+                          <Bot
+                            className="w-3 h-3 shrink-0"
+                            style={{ color: "#ef4444" }}
+                          />
                         ) : (
-                          <Zap className="w-3 h-3 shrink-0" style={{ color: '#60a5fa' }} />
+                          <Zap
+                            className="w-3 h-3 shrink-0"
+                            style={{ color: "#60a5fa" }}
+                          />
                         )}
                         <span className="truncate">{inst.label}</span>
                       </button>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          const type = inst.label.startsWith('Terminal') ? 'terminal'
-                            : inst.label.startsWith('Agent') ? 'agent'
-                            : 'hivemind';
-                          setCloseConfirm({ id: inst.id, label: inst.label, type });
+                          const type = inst.label.startsWith("Terminal")
+                            ? "terminal"
+                            : inst.label.startsWith("Agent")
+                              ? "agent"
+                              : "hivemind";
+                          setCloseConfirm({
+                            id: inst.id,
+                            label: inst.label,
+                            type,
+                          });
                         }}
                         className="p-0.5 rounded opacity-0 group-hover:opacity-60 hover:opacity-100 transition-opacity mr-1"
-                        style={{ color: 'var(--text-secondary)' }}
+                        style={{ color: "var(--text-secondary)" }}
                         title="Close session"
                       >
                         <X className="w-3 h-3" />
@@ -938,20 +1143,27 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
                 })}
 
                 {/* All Terminals grid view button — shown when 2+ total sessions (visible + hidden) */}
-                {(terminalInstances.length + hiddenSessions.length) >= 2 && (
+                {terminalInstances.length + hiddenSessions.length >= 2 && (
                   <button
                     onClick={() => {
                       setShowAllTerminals(!showAllTerminals);
                       setShowLauncher(false);
                       setActiveWebPageId(null);
-                      if (showAllTerminals) { setGridShowAll(false); setGridFocusedId(null); }
+                      if (showAllTerminals) {
+                        setGridShowAll(false);
+                        setGridFocusedId(null);
+                      }
                     }}
                     className="flex items-center gap-1 px-2 rounded-md shrink-0 transition-colors text-xs"
                     title="View all terminals"
                     style={{
                       height: 28,
-                      color: showAllTerminals ? 'var(--accent)' : 'var(--text-secondary)',
-                      background: showAllTerminals ? 'var(--bg-tertiary)' : 'transparent',
+                      color: showAllTerminals
+                        ? "var(--accent)"
+                        : "var(--text-secondary)",
+                      background: showAllTerminals
+                        ? "var(--bg-tertiary)"
+                        : "transparent",
                     }}
                   >
                     <LayoutGrid className="w-3 h-3" />
@@ -971,151 +1183,227 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
                       }
                     }}
                     className="flex items-center gap-1 px-2 rounded-md shrink-0 transition-colors text-xs"
-                    title={hiddenSessions.length > 0 ? `${hiddenSessions.length} hidden session(s) — click to restore` : 'Scan for external hivemind sessions to adopt'}
+                    title={
+                      hiddenSessions.length > 0
+                        ? `${hiddenSessions.length} hidden session(s) — click to restore`
+                        : "Scan for external hivemind sessions to adopt"
+                    }
                     style={{
                       height: 28,
-                      color: hiddenSessions.length > 0 ? '#f59e0b' : showAdoptMenu ? 'var(--warning, #f59e0b)' : 'var(--text-secondary)',
-                      background: showAdoptMenu ? 'var(--bg-tertiary)' : 'transparent',
+                      color:
+                        hiddenSessions.length > 0
+                          ? "#f59e0b"
+                          : showAdoptMenu
+                            ? "var(--warning, #f59e0b)"
+                            : "var(--text-secondary)",
+                      background: showAdoptMenu
+                        ? "var(--bg-tertiary)"
+                        : "transparent",
                     }}
                   >
                     <Download className="w-3.5 h-3.5" />
                     {hiddenSessions.length > 0 && (
                       <span
                         className="text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center"
-                        style={{ background: '#f59e0b', color: '#000' }}
+                        style={{ background: "#f59e0b", color: "#000" }}
                       >
                         {hiddenSessions.length}
                       </span>
                     )}
                   </button>
 
-                  {showAdoptMenu && createPortal(
-                    <div
-                      ref={adoptDropdownRef}
-                      className="fixed rounded-lg shadow-lg border z-[9999] min-w-[280px] max-w-[400px] py-1"
-                      style={{
-                        background: 'var(--bg-primary)',
-                        borderColor: 'var(--border)',
-                        top: (adoptMenuRef.current?.getBoundingClientRect().bottom ?? 0) + 4,
-                        left: adoptMenuRef.current?.getBoundingClientRect().left ?? 0,
-                      }}
-                    >
-                      {/* Hidden sessions (tabs the user hid but processes still running) */}
-                      {hiddenSessions.length > 0 && (
-                        <>
-                          <div className="flex items-center justify-between px-3 py-1.5">
-                            <span
-                              className="text-[10px] font-semibold uppercase tracking-wider"
-                              style={{ color: 'var(--text-secondary)' }}
-                            >
-                              Hidden
-                            </span>
-                            {hiddenSessions.length > 1 && (
-                              <button
-                                onClick={unhideAll}
-                                className="text-[10px] font-medium px-1.5 py-0.5 rounded hover:opacity-80 transition-opacity"
-                                style={{ color: 'var(--accent)', background: 'var(--bg-tertiary)' }}
+                  {showAdoptMenu &&
+                    createPortal(
+                      <div
+                        ref={adoptDropdownRef}
+                        className="fixed rounded-lg shadow-lg border z-[9999] min-w-[280px] max-w-[400px] py-1"
+                        style={{
+                          background: "var(--bg-primary)",
+                          borderColor: "var(--border)",
+                          top:
+                            (adoptMenuRef.current?.getBoundingClientRect()
+                              .bottom ?? 0) + 4,
+                          left:
+                            adoptMenuRef.current?.getBoundingClientRect()
+                              .left ?? 0,
+                        }}
+                      >
+                        {/* Hidden sessions (tabs the user hid but processes still running) */}
+                        {hiddenSessions.length > 0 && (
+                          <>
+                            <div className="flex items-center justify-between px-3 py-1.5">
+                              <span
+                                className="text-[10px] font-semibold uppercase tracking-wider"
+                                style={{ color: "var(--text-secondary)" }}
                               >
-                                Restore All
-                              </button>
-                            )}
+                                Hidden
+                              </span>
+                              {hiddenSessions.length > 1 && (
+                                <button
+                                  onClick={unhideAll}
+                                  className="text-[10px] font-medium px-1.5 py-0.5 rounded hover:opacity-80 transition-opacity"
+                                  style={{
+                                    color: "var(--accent)",
+                                    background: "var(--bg-tertiary)",
+                                  }}
+                                >
+                                  Restore All
+                                </button>
+                              )}
+                            </div>
+                            {hiddenSessions.map((s: any) => {
+                              const isTerminal = s.task === "Terminal";
+                              const isAgent = s.task?.startsWith("Agent (");
+                              const typeLabel = isTerminal
+                                ? "Terminal"
+                                : isAgent
+                                  ? "Agent"
+                                  : "Hivemind";
+                              const typeColor = isTerminal
+                                ? "#f59e0b"
+                                : isAgent
+                                  ? "#ef4444"
+                                  : "#60a5fa";
+                              return (
+                                <button
+                                  key={s.id}
+                                  onClick={() => unhideSession(s.id)}
+                                  className="w-full text-left px-3 py-2 text-xs hover:bg-[var(--bg-tertiary)] transition-colors"
+                                  style={{ color: "var(--text-primary)" }}
+                                >
+                                  <div className="flex items-center gap-1.5">
+                                    <span
+                                      className="text-[9px] font-semibold px-1.5 py-0.5 rounded"
+                                      style={{
+                                        background: `${typeColor}20`,
+                                        color: typeColor,
+                                      }}
+                                    >
+                                      {typeLabel}
+                                    </span>
+                                    <span className="truncate">
+                                      {s.task === "Terminal"
+                                        ? "Interactive shell"
+                                        : s.task?.slice(0, 50)}
+                                    </span>
+                                  </div>
+                                  <div
+                                    className="truncate mt-0.5"
+                                    style={{ color: "var(--text-secondary)" }}
+                                  >
+                                    {s.status} ·{" "}
+                                    {s.created_at
+                                      ? new Date(
+                                          s.created_at +
+                                            (s.created_at.endsWith("Z")
+                                              ? ""
+                                              : "Z"),
+                                        ).toLocaleString()
+                                      : "unknown"}
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </>
+                        )}
+
+                        {/* Divider between sections */}
+                        {hiddenSessions.length > 0 &&
+                          discoverableSessions.length > 0 && (
+                            <div
+                              className="mx-3 my-1"
+                              style={{ height: 1, background: "var(--border)" }}
+                            />
+                          )}
+
+                        {/* External sessions (tmux sessions not tracked by OctoAlly) */}
+                        <div
+                          className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider"
+                          style={{ color: "var(--text-secondary)" }}
+                        >
+                          External
+                        </div>
+                        {discoverableSessions.length === 0 ? (
+                          <div
+                            className="px-3 py-2 text-xs"
+                            style={{ color: "var(--text-secondary)" }}
+                          >
+                            No external sessions found
                           </div>
-                          {hiddenSessions.map((s: any) => {
-                            const isTerminal = s.task === 'Terminal';
-                            const isAgent = s.task?.startsWith('Agent (');
-                            const typeLabel = isTerminal ? 'Terminal' : isAgent ? 'Agent' : 'Hivemind';
-                            const typeColor = isTerminal ? '#f59e0b' : isAgent ? '#ef4444' : '#60a5fa';
+                        ) : (
+                          discoverableSessions.map((s) => {
+                            const isTerminal = !s.task || s.task === "Terminal";
+                            const typeLabel = isTerminal
+                              ? "Terminal"
+                              : "Hivemind";
+                            const typeColor = isTerminal
+                              ? "#f59e0b"
+                              : "#60a5fa";
                             return (
                               <button
-                                key={s.id}
-                                onClick={() => unhideSession(s.id)}
+                                key={s.socketPath}
+                                onClick={() => handleAdoptSession(s.socketPath)}
                                 className="w-full text-left px-3 py-2 text-xs hover:bg-[var(--bg-tertiary)] transition-colors"
-                                style={{ color: 'var(--text-primary)' }}
+                                style={{ color: "var(--text-primary)" }}
                               >
                                 <div className="flex items-center gap-1.5">
                                   <span
                                     className="text-[9px] font-semibold px-1.5 py-0.5 rounded"
-                                    style={{ background: `${typeColor}20`, color: typeColor }}
+                                    style={{
+                                      background: `${typeColor}20`,
+                                      color: typeColor,
+                                    }}
                                   >
                                     {typeLabel}
                                   </span>
-                                  <span className="truncate">{s.task === 'Terminal' ? 'Interactive shell' : s.task?.slice(0, 50)}</span>
+                                  <span className="truncate">
+                                    {s.task?.slice(0, 60) || "Session"}
+                                  </span>
                                 </div>
-                                <div className="truncate mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-                                  {s.status} · {s.created_at ? new Date(s.created_at + (s.created_at.endsWith('Z') ? '' : 'Z')).toLocaleString() : 'unknown'}
+                                <div
+                                  className="truncate mt-0.5"
+                                  style={{ color: "var(--text-secondary)" }}
+                                >
+                                  {s.startedAt
+                                    ? new Date(
+                                        s.startedAt +
+                                          (String(s.startedAt).endsWith("Z")
+                                            ? ""
+                                            : "Z"),
+                                      ).toLocaleString()
+                                    : "unknown time"}
                                 </div>
                               </button>
                             );
-                          })}
-                        </>
-                      )}
-
-                      {/* Divider between sections */}
-                      {hiddenSessions.length > 0 && discoverableSessions.length > 0 && (
-                        <div className="mx-3 my-1" style={{ height: 1, background: 'var(--border)' }} />
-                      )}
-
-                      {/* External sessions (tmux sessions not tracked by OctoAlly) */}
-                      <div
-                        className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider"
-                        style={{ color: 'var(--text-secondary)' }}
-                      >
-                        External
-                      </div>
-                      {discoverableSessions.length === 0 ? (
-                        <div
-                          className="px-3 py-2 text-xs"
-                          style={{ color: 'var(--text-secondary)' }}
-                        >
-                          No external sessions found
-                        </div>
-                      ) : (
-                        discoverableSessions.map((s) => {
-                          const isTerminal = !s.task || s.task === 'Terminal';
-                          const typeLabel = isTerminal ? 'Terminal' : 'Hivemind';
-                          const typeColor = isTerminal ? '#f59e0b' : '#60a5fa';
-                          return (
-                            <button
-                              key={s.socketPath}
-                              onClick={() => handleAdoptSession(s.socketPath)}
-                              className="w-full text-left px-3 py-2 text-xs hover:bg-[var(--bg-tertiary)] transition-colors"
-                              style={{ color: 'var(--text-primary)' }}
-                            >
-                              <div className="flex items-center gap-1.5">
-                                <span
-                                  className="text-[9px] font-semibold px-1.5 py-0.5 rounded"
-                                  style={{ background: `${typeColor}20`, color: typeColor }}
-                                >
-                                  {typeLabel}
-                                </span>
-                                <span className="truncate">{s.task?.slice(0, 60) || 'Session'}</span>
-                              </div>
-                              <div className="truncate mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-                                {s.startedAt ? new Date(s.startedAt + (String(s.startedAt).endsWith('Z') ? '' : 'Z')).toLocaleString() : 'unknown time'}
-                              </div>
-                            </button>
-                          );
-                        })
-                      )}
-                    </div>,
-                    document.body
-                  )}
+                          })
+                        )}
+                      </div>,
+                      document.body,
+                    )}
                 </div>
 
                 {/* Web page tabs — shown alongside terminal tabs */}
                 {webPageInstances.length > 0 && (
                   <div
                     className="mx-1 self-stretch"
-                    style={{ width: 1, background: 'var(--border)' }}
+                    style={{ width: 1, background: "var(--border)" }}
                   />
                 )}
                 {webPageInstances.map((inst) => {
-                  const isActive = !showLauncher && !showAllTerminals && activeWebPageId === inst.id && !activeTerminalId;
+                  const isActive =
+                    !showLauncher &&
+                    !showAllTerminals &&
+                    activeWebPageId === inst.id &&
+                    !activeTerminalId;
                   return (
                     <div
                       key={inst.id}
                       className="flex items-center gap-0.5 rounded-md shrink-0 group"
-                      style={{ background: isActive ? 'var(--bg-tertiary)' : 'transparent' }}
+                      style={{
+                        background: isActive
+                          ? "var(--bg-tertiary)"
+                          : "transparent",
+                      }}
                     >
                       <button
                         onClick={() => {
@@ -1125,10 +1413,19 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
                           setShowAllTerminals(false);
                         }}
                         className="flex items-center gap-1.5 pl-3 pr-1 py-1 text-xs font-medium transition-colors"
-                        style={{ color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)' }}
+                        style={{
+                          color: isActive
+                            ? "var(--text-primary)"
+                            : "var(--text-secondary)",
+                        }}
                       >
-                        <Globe className="w-3 h-3 shrink-0" style={{ color: 'var(--accent)' }} />
-                        <span className="truncate max-w-[120px]">{inst.label}</span>
+                        <Globe
+                          className="w-3 h-3 shrink-0"
+                          style={{ color: "var(--accent)" }}
+                        />
+                        <span className="truncate max-w-[120px]">
+                          {inst.label}
+                        </span>
                       </button>
                       <button
                         onClick={(e) => {
@@ -1136,7 +1433,7 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
                           closeWebPage(inst.id);
                         }}
                         className="p-0.5 rounded opacity-0 group-hover:opacity-60 hover:opacity-100 transition-opacity mr-1"
-                        style={{ color: 'var(--text-secondary)' }}
+                        style={{ color: "var(--text-secondary)" }}
                         title="Close web page"
                       >
                         <X className="w-3 h-3" />
@@ -1147,7 +1444,7 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
               </>
             )}
 
-            {activeMode === 'explorer' && (
+            {activeMode === "explorer" && (
               <>
                 {explorerInstances.map((inst) => {
                   const isActive = inst.id === activeExplorerId;
@@ -1156,14 +1453,25 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
                     <div
                       key={inst.id}
                       className="flex items-center gap-0.5 rounded-md shrink-0 group"
-                      style={{ background: isActive ? 'var(--bg-tertiary)' : 'transparent' }}
+                      style={{
+                        background: isActive
+                          ? "var(--bg-tertiary)"
+                          : "transparent",
+                      }}
                     >
                       <button
                         onClick={() => setActiveExplorerId(inst.id)}
                         className="flex items-center gap-1.5 pl-3 pr-1 py-1 text-xs font-medium transition-colors"
-                        style={{ color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)' }}
+                        style={{
+                          color: isActive
+                            ? "var(--text-primary)"
+                            : "var(--text-secondary)",
+                        }}
                       >
-                        <FolderTree className="w-3 h-3 shrink-0" style={{ color: 'var(--accent)' }} />
+                        <FolderTree
+                          className="w-3 h-3 shrink-0"
+                          style={{ color: "var(--accent)" }}
+                        />
                         <span className="truncate">{inst.label}</span>
                       </button>
                       {canClose && (
@@ -1173,7 +1481,7 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
                             closeExplorer(inst.id);
                           }}
                           className="p-0.5 rounded opacity-0 group-hover:opacity-60 hover:opacity-100 transition-opacity mr-1"
-                          style={{ color: 'var(--text-secondary)' }}
+                          style={{ color: "var(--text-secondary)" }}
                           title="Close"
                         >
                           <X className="w-3 h-3" />
@@ -1186,7 +1494,11 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
                   onClick={addExplorer}
                   className="flex items-center justify-center rounded-md shrink-0 transition-colors"
                   title="New Explorer"
-                  style={{ width: 28, height: 28, color: 'var(--text-secondary)' }}
+                  style={{
+                    width: 28,
+                    height: 28,
+                    color: "var(--text-secondary)",
+                  }}
                 >
                   <Plus className="w-3.5 h-3.5" />
                 </button>
@@ -1198,57 +1510,81 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
         {/* Panel content */}
         <div className="flex-1 min-h-0 relative">
           {/* Terminal mode */}
-          {activeMode === 'terminal' && (
+          {activeMode === "terminal" && (
             <>
               {/* Show launcher when requested or no sessions */}
-              {(showLauncher || (terminalInstances.length === 0 && webPageInstances.length === 0)) && project && (
-                <div className="h-full absolute inset-0">
-                  <SessionLauncher
-                    project={project}
-                    onSessionCreated={handleSessionCreated}
-                    onWebPageCreated={handleWebPageCreated}
-                  />
-                </div>
-              )}
+              {(showLauncher ||
+                (terminalInstances.length === 0 &&
+                  webPageInstances.length === 0)) &&
+                project && (
+                  <div className="h-full absolute inset-0">
+                    <SessionLauncher
+                      project={project}
+                      onSessionCreated={handleSessionCreated}
+                      onWebPageCreated={handleWebPageCreated}
+                    />
+                  </div>
+                )}
 
               {/* Terminal instances — always mounted, layout switches via CSS
                   between single-view (absolute positioned) and grid view.
                   This avoids duplicate WebSocket connections and 5000-chunk replays. */}
               <div
-                className={gridMode
-                  ? "h-full absolute inset-0 z-10 flex flex-col"
-                  : "h-full absolute inset-0"
+                className={
+                  gridMode
+                    ? "h-full absolute inset-0 z-10 flex flex-col"
+                    : "h-full absolute inset-0"
                 }
-                style={gridMode
-                  ? { background: 'var(--bg-primary)' }
-                  : { pointerEvents: 'none' }
+                style={
+                  gridMode
+                    ? { background: "var(--bg-primary)" }
+                    : { pointerEvents: "none" }
                 }
               >
                 {/* Grid header bar with controls */}
                 {gridMode && (
                   <div
                     className="flex items-center gap-2 px-4 py-2 shrink-0 border-b"
-                    style={{ borderColor: 'var(--border)', background: 'var(--bg-secondary)' }}
+                    style={{
+                      borderColor: "var(--border)",
+                      background: "var(--bg-secondary)",
+                    }}
                   >
-                    <Monitor className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} />
-                    <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
+                    <Monitor
+                      className="w-3.5 h-3.5"
+                      style={{ color: "var(--accent)" }}
+                    />
+                    <span
+                      className="text-xs font-semibold"
+                      style={{ color: "var(--text-primary)" }}
+                    >
                       All Sessions
                     </span>
                     <span
                       className="text-[10px] px-1.5 py-0.5 rounded-full"
-                      style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}
+                      style={{
+                        background: "var(--bg-tertiary)",
+                        color: "var(--text-secondary)",
+                      }}
                     >
                       {allGridInstances.length}
                     </span>
                     {gridHiddenCount > 0 && !gridShowAll && (
                       <>
-                        <span className="text-[10px]" style={{ color: 'var(--text-secondary)', opacity: 0.7 }}>
-                          ({gridVisibleInstances.length} shown, {gridHiddenCount} hidden)
+                        <span
+                          className="text-[10px]"
+                          style={{
+                            color: "var(--text-secondary)",
+                            opacity: 0.7,
+                          }}
+                        >
+                          ({gridVisibleInstances.length} shown,{" "}
+                          {gridHiddenCount} hidden)
                         </span>
                         <button
                           onClick={() => setGridShowAll(true)}
                           className="text-[10px] font-medium hover:underline"
-                          style={{ color: 'var(--accent)' }}
+                          style={{ color: "var(--accent)" }}
                         >
                           Show All
                         </button>
@@ -1260,31 +1596,50 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
                       <button
                         onClick={() => setGridColsOpen(!gridColsOpen)}
                         className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium transition-colors"
-                        style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
+                        style={{
+                          background: "var(--bg-tertiary)",
+                          color: "var(--text-secondary)",
+                          border: "1px solid var(--border)",
+                        }}
                       >
                         <Columns3 className="w-3.5 h-3.5" />
-                        {gridColumns} col{gridColumns !== 1 ? 's' : ''}
-                        <ChevronDown className={`w-3 h-3 transition-transform ${gridColsOpen ? 'rotate-180' : ''}`} />
+                        {gridColumns} col{gridColumns !== 1 ? "s" : ""}
+                        <ChevronDown
+                          className={`w-3 h-3 transition-transform ${gridColsOpen ? "rotate-180" : ""}`}
+                        />
                       </button>
                       {gridColsOpen && (
                         <>
-                          <div className="fixed inset-0 z-40" onClick={() => setGridColsOpen(false)} />
+                          <div
+                            className="fixed inset-0 z-40"
+                            onClick={() => setGridColsOpen(false)}
+                          />
                           <div
                             className="absolute right-0 top-full mt-1 z-50 rounded-lg border shadow-xl overflow-hidden"
-                            style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)', width: '120px' }}
+                            style={{
+                              background: "var(--bg-secondary)",
+                              borderColor: "var(--border)",
+                              width: "120px",
+                            }}
                           >
                             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
                               <button
                                 key={n}
-                                onClick={() => { setGridColumns(n); setGridColsOpen(false); }}
+                                onClick={() => {
+                                  setGridColumns(n);
+                                  setGridColsOpen(false);
+                                }}
                                 className="flex items-center gap-2 w-full px-3 py-1.5 text-xs transition-colors hover:bg-white/5"
                                 style={{
-                                  color: n === gridColumns ? 'var(--accent)' : 'var(--text-secondary)',
+                                  color:
+                                    n === gridColumns
+                                      ? "var(--accent)"
+                                      : "var(--text-secondary)",
                                   fontWeight: n === gridColumns ? 600 : 400,
-                                  borderBottom: '1px solid var(--border)',
+                                  borderBottom: "1px solid var(--border)",
                                 }}
                               >
-                                {n} column{n !== 1 ? 's' : ''}
+                                {n} column{n !== 1 ? "s" : ""}
                               </button>
                             ))}
                           </div>
@@ -1297,26 +1652,47 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
                       <button
                         onClick={() => setGridRowsOpen(!gridRowsOpen)}
                         className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium transition-colors"
-                        style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
+                        style={{
+                          background: "var(--bg-tertiary)",
+                          color: "var(--text-secondary)",
+                          border: "1px solid var(--border)",
+                        }}
                       >
                         <Rows3 className="w-3.5 h-3.5" />
-                        {gridRows === 'auto' ? 'Auto' : `${gridRows} row${gridRows !== 1 ? 's' : ''}`}
-                        <ChevronDown className={`w-3 h-3 transition-transform ${gridRowsOpen ? 'rotate-180' : ''}`} />
+                        {gridRows === "auto"
+                          ? "Auto"
+                          : `${gridRows} row${gridRows !== 1 ? "s" : ""}`}
+                        <ChevronDown
+                          className={`w-3 h-3 transition-transform ${gridRowsOpen ? "rotate-180" : ""}`}
+                        />
                       </button>
                       {gridRowsOpen && (
                         <>
-                          <div className="fixed inset-0 z-40" onClick={() => setGridRowsOpen(false)} />
+                          <div
+                            className="fixed inset-0 z-40"
+                            onClick={() => setGridRowsOpen(false)}
+                          />
                           <div
                             className="absolute right-0 top-full mt-1 z-50 rounded-lg border shadow-xl overflow-hidden"
-                            style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)', width: '120px' }}
+                            style={{
+                              background: "var(--bg-secondary)",
+                              borderColor: "var(--border)",
+                              width: "120px",
+                            }}
                           >
                             <button
-                              onClick={() => { setGridRows('auto'); setGridRowsOpen(false); }}
+                              onClick={() => {
+                                setGridRows("auto");
+                                setGridRowsOpen(false);
+                              }}
                               className="flex items-center gap-2 w-full px-3 py-1.5 text-xs transition-colors hover:bg-white/5"
                               style={{
-                                color: gridRows === 'auto' ? 'var(--accent)' : 'var(--text-secondary)',
-                                fontWeight: gridRows === 'auto' ? 600 : 400,
-                                borderBottom: '1px solid var(--border)',
+                                color:
+                                  gridRows === "auto"
+                                    ? "var(--accent)"
+                                    : "var(--text-secondary)",
+                                fontWeight: gridRows === "auto" ? 600 : 400,
+                                borderBottom: "1px solid var(--border)",
                               }}
                             >
                               Auto (16:9)
@@ -1324,15 +1700,21 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
                             {[1, 2, 3, 4, 5, 6].map((n) => (
                               <button
                                 key={n}
-                                onClick={() => { setGridRows(n); setGridRowsOpen(false); }}
+                                onClick={() => {
+                                  setGridRows(n);
+                                  setGridRowsOpen(false);
+                                }}
                                 className="flex items-center gap-2 w-full px-3 py-1.5 text-xs transition-colors hover:bg-white/5"
                                 style={{
-                                  color: n === gridRows ? 'var(--accent)' : 'var(--text-secondary)',
+                                  color:
+                                    n === gridRows
+                                      ? "var(--accent)"
+                                      : "var(--text-secondary)",
                                   fontWeight: n === gridRows ? 600 : 400,
-                                  borderBottom: '1px solid var(--border)',
+                                  borderBottom: "1px solid var(--border)",
                                 }}
                               >
-                                {n} row{n !== 1 ? 's' : ''}
+                                {n} row{n !== 1 ? "s" : ""}
                               </button>
                             ))}
                           </div>
@@ -1343,179 +1725,268 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
                 )}
 
                 {/* Grid scroll area */}
-                <div ref={gridContainerRef} className={gridMode ? "flex-1 overflow-y-auto p-4" : ""}>
-                {/* Backdrop inside grid wrapper so it shares the same stacking
-                    context as the expanded card (z-10 on wrapper creates a context) */}
-                {gridMode && expandedTerminalId && (
-                  <div
-                    className="fixed inset-0 z-40"
-                    style={{ background: 'rgba(0,0,0,0.7)' }}
-                    onClick={() => setExpandedTerminalId(null)}
-                  />
-                )}
                 <div
-                  ref={gridInnerRef}
-                  className={gridMode ? "grid gap-4" : "contents"}
-                  style={gridMode ? { gridTemplateColumns: `repeat(${gridColumns}, 1fr)` } : undefined}
+                  ref={gridContainerRef}
+                  className={gridMode ? "flex-1 overflow-y-auto p-4" : ""}
                 >
-                  {(gridMode ? gridVisibleInstances : terminalInstances).map((term) => {
-                    const isSingleActive = !showLauncher && !showAllTerminals && !activeWebPageId && activeTerminalId === term.id;
-                    const isExpanded = gridMode && expandedTerminalId === term.id;
-                    const isFocused = gridMode && gridFocusedId === term.id;
-                    const termVisible = gridMode
-                      ? (active && (expandedTerminalId ? isExpanded : true))
-                      : (isSingleActive && active);
+                  {/* Backdrop inside grid wrapper so it shares the same stacking
+                    context as the expanded card (z-10 on wrapper creates a context) */}
+                  {gridMode && expandedTerminalId && (
+                    <div
+                      className="fixed inset-0 z-40"
+                      style={{ background: "rgba(0,0,0,0.7)" }}
+                      onClick={() => setExpandedTerminalId(null)}
+                    />
+                  )}
+                  <div
+                    ref={gridInnerRef}
+                    className={gridMode ? "grid gap-4" : "contents"}
+                    style={
+                      gridMode
+                        ? { gridTemplateColumns: `repeat(${gridColumns}, 1fr)` }
+                        : undefined
+                    }
+                  >
+                    {(gridMode ? gridVisibleInstances : terminalInstances).map(
+                      (term) => {
+                        const isSingleActive =
+                          !showLauncher &&
+                          !showAllTerminals &&
+                          !activeWebPageId &&
+                          activeTerminalId === term.id;
+                        const isExpanded =
+                          gridMode && expandedTerminalId === term.id;
+                        const isFocused = gridMode && gridFocusedId === term.id;
+                        const termVisible = gridMode
+                          ? active && (expandedTerminalId ? isExpanded : true)
+                          : isSingleActive && active;
 
-                    // Lazy-mount: in single-view, only mount terminals user has viewed
-                    if (termVisible || gridMode) mountedTerminals.current.add(term.id);
-                    const shouldMount = gridMode || mountedTerminals.current.has(term.id);
+                        // Lazy-mount: in single-view, only mount terminals user has viewed
+                        if (termVisible || gridMode)
+                          mountedTerminals.current.add(term.id);
+                        const shouldMount =
+                          gridMode || mountedTerminals.current.has(term.id);
 
-                    return (
-                      <div
-                        key={term.id}
-                        className={gridMode
-                          ? `rounded-lg border flex flex-col overflow-hidden ${isExpanded ? 'fixed z-50 shadow-2xl' : ''}`
-                          : ""
-                        }
-                        style={gridMode
-                          ? (isExpanded ? {
-                              borderColor: 'var(--border)',
-                              background: '#0f1117',
-                              width: 'calc(100vw - 48px)',
-                              height: 'calc(100vh - 48px)',
-                              top: '24px',
-                              left: '24px',
-                            } : {
-                              borderColor: isFocused ? '#22c55e' : 'var(--border)',
-                              background: 'var(--bg-secondary)',
-                              height: `${gridCardHeight + (gridMounted ? 1 : 0)}px`,
-                            })
-                          : {
-                              visibility: isSingleActive ? 'visible' : 'hidden',
-                              pointerEvents: isSingleActive ? 'auto' : 'none',
-                              zIndex: isSingleActive ? 1 : 0,
-                              position: 'absolute' as const,
-                              inset: 0,
-                              height: '100%',
+                        return (
+                          <div
+                            key={term.id}
+                            className={
+                              gridMode
+                                ? `rounded-lg border flex flex-col overflow-hidden ${isExpanded ? "fixed z-50 shadow-2xl" : ""}`
+                                : ""
                             }
-                        }
-                        onClick={isExpanded ? (e) => e.stopPropagation() : undefined}
-                        onMouseDown={gridMode && !isExpanded ? () => setGridFocusedId(term.id) : undefined}
-                      >
-                        {/* Card header — always in DOM for stable React tree, hidden in single view */}
-                        <div
-                          className="items-center gap-2 px-3 py-2 border-b shrink-0 rounded-t-lg transition-colors duration-200"
-                          style={{
-                            borderColor: isFocused && gridMode ? '#22c55e' : 'var(--border)',
-                            background: isFocused && gridMode ? '#22c55e30' : 'var(--bg-tertiary)',
-                            display: gridMode ? 'flex' : 'none',
-                          }}
-                        >
-                          <Monitor className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--success)' }} />
-                          <span className={`font-medium shrink-0 ${isExpanded ? 'text-sm' : 'text-xs'}`} style={{ color: 'var(--text-primary)' }}>
-                            {term.label}
-                          </span>
-                          <span className={`truncate min-w-0 ml-auto ${isExpanded ? 'text-xs ml-2' : 'text-[10px]'}`} style={{ color: 'var(--text-secondary)' }}>
-                            {projectSessions.find((s) => s.id === term.id)?.task || 'Terminal'}
-                          </span>
-                          {isExpanded ? (
-                            <div className="flex items-center gap-2 ml-auto">
-                              <button
-                                onClick={() => {
-                                  setActiveTerminalId(term.id);
-                                  setShowAllTerminals(false);
-                                  setExpandedTerminalId(null);
-                                  focusTerminalById(term.id);
-                                }}
-                                className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors"
-                                style={{ background: 'var(--accent)', color: 'white' }}
-                                title="Focus this terminal"
+                            style={
+                              gridMode
+                                ? isExpanded
+                                  ? {
+                                      borderColor: "var(--border)",
+                                      background: "#0f1117",
+                                      width: "calc(100vw - 48px)",
+                                      height: "calc(100vh - 48px)",
+                                      top: "24px",
+                                      left: "24px",
+                                    }
+                                  : {
+                                      borderColor: isFocused
+                                        ? "#22c55e"
+                                        : "var(--border)",
+                                      background: "var(--bg-secondary)",
+                                      height: `${gridCardHeight + (gridMounted ? 1 : 0)}px`,
+                                    }
+                                : {
+                                    visibility: isSingleActive
+                                      ? "visible"
+                                      : "hidden",
+                                    pointerEvents: isSingleActive
+                                      ? "auto"
+                                      : "none",
+                                    zIndex: isSingleActive ? 1 : 0,
+                                    position: "absolute" as const,
+                                    inset: 0,
+                                    height: "100%",
+                                  }
+                            }
+                            onClick={
+                              isExpanded
+                                ? (e) => e.stopPropagation()
+                                : undefined
+                            }
+                            onMouseDown={
+                              gridMode && !isExpanded
+                                ? () => setGridFocusedId(term.id)
+                                : undefined
+                            }
+                          >
+                            {/* Card header — always in DOM for stable React tree, hidden in single view */}
+                            <div
+                              className="items-center gap-2 px-3 py-2 border-b shrink-0 rounded-t-lg transition-colors duration-200"
+                              style={{
+                                borderColor:
+                                  isFocused && gridMode
+                                    ? "#22c55e"
+                                    : "var(--border)",
+                                background:
+                                  isFocused && gridMode
+                                    ? "#22c55e30"
+                                    : "var(--bg-tertiary)",
+                                display: gridMode ? "flex" : "none",
+                              }}
+                            >
+                              <Monitor
+                                className="w-3.5 h-3.5 shrink-0"
+                                style={{ color: "var(--success)" }}
+                              />
+                              <span
+                                className={`font-medium shrink-0 ${isExpanded ? "text-sm" : "text-xs"}`}
+                                style={{ color: "var(--text-primary)" }}
                               >
-                                <ExternalLink className="w-3 h-3" />
-                                <span>Focus</span>
-                              </button>
-                              <button
-                                onClick={() => setExpandedTerminalId(null)}
-                                className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors"
-                                style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
-                                title="Minimize back to grid"
+                                {term.label}
+                              </span>
+                              <span
+                                className={`truncate min-w-0 ml-auto ${isExpanded ? "text-xs ml-2" : "text-[10px]"}`}
+                                style={{ color: "var(--text-secondary)" }}
                               >
-                                <Minimize2 className="w-3 h-3" />
-                                <span>Minimize</span>
-                              </button>
+                                {projectSessions.find((s) => s.id === term.id)
+                                  ?.task || "Terminal"}
+                              </span>
+                              {isExpanded ? (
+                                <div className="flex items-center gap-2 ml-auto">
+                                  <button
+                                    onClick={() => {
+                                      setActiveTerminalId(term.id);
+                                      setShowAllTerminals(false);
+                                      setExpandedTerminalId(null);
+                                      focusTerminalById(term.id);
+                                    }}
+                                    className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors"
+                                    style={{
+                                      background: "var(--accent)",
+                                      color: "white",
+                                    }}
+                                    title="Focus this terminal"
+                                  >
+                                    <ExternalLink className="w-3 h-3" />
+                                    <span>Focus</span>
+                                  </button>
+                                  <button
+                                    onClick={() => setExpandedTerminalId(null)}
+                                    className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors"
+                                    style={{
+                                      background: "var(--bg-secondary)",
+                                      color: "var(--text-secondary)",
+                                      border: "1px solid var(--border)",
+                                    }}
+                                    title="Minimize back to grid"
+                                  >
+                                    <Minimize2 className="w-3 h-3" />
+                                    <span>Minimize</span>
+                                  </button>
+                                </div>
+                              ) : (
+                                <>
+                                  <button
+                                    onClick={() =>
+                                      setExpandedTerminalId(term.id)
+                                    }
+                                    className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors hover:opacity-100 opacity-70"
+                                    style={{
+                                      background: "var(--bg-secondary)",
+                                      color: "var(--text-secondary)",
+                                      border: "1px solid var(--border)",
+                                    }}
+                                    title="Expand terminal"
+                                  >
+                                    <Maximize2 className="w-2.5 h-2.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setActiveTerminalId(term.id);
+                                      setShowAllTerminals(false);
+                                      focusTerminalById(term.id);
+                                    }}
+                                    className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors hover:opacity-100 opacity-70"
+                                    style={{
+                                      background: "var(--accent)",
+                                      color: "white",
+                                    }}
+                                    title="Focus this terminal"
+                                  >
+                                    <ExternalLink className="w-2.5 h-2.5" />
+                                  </button>
+                                </>
+                              )}
                             </div>
-                          ) : (
-                            <>
-                              <button
-                                onClick={() => setExpandedTerminalId(term.id)}
-                                className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors hover:opacity-100 opacity-70"
-                                style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
-                                title="Expand terminal"
-                              >
-                                <Maximize2 className="w-2.5 h-2.5" />
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setActiveTerminalId(term.id);
-                                  setShowAllTerminals(false);
-                                  focusTerminalById(term.id);
-                                }}
-                                className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors hover:opacity-100 opacity-70"
-                                style={{ background: 'var(--accent)', color: 'white' }}
-                                title="Focus this terminal"
-                              >
-                                <ExternalLink className="w-2.5 h-2.5" />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                        <div className={gridMode ? "flex-1 min-h-0" : "h-full"}>
-                          {shouldMount && (
-                            <Terminal
-                              sessionId={term.id}
-                              visible={termVisible}
-                              suspended={terminalsSuspended || (!gridMode && !termVisible)}
-                              passiveResize={gridMode && !isExpanded && projectSessions.find((s) => s.id === term.id)?.task === 'Terminal'}
-                              hideCursor={projectSessions.find((s) => s.id === term.id)?.task !== 'Terminal' && projectSessions.some((s) => s.id === term.id)}
-                              onReconnect={() => reconnectTerminal(term.id)}
-                              onPopOut={() => closeTerminalTab(term.id)}
-                            />
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+                            <div
+                              className={gridMode ? "flex-1 min-h-0" : "h-full"}
+                            >
+                              {shouldMount && (
+                                <Terminal
+                                  sessionId={term.id}
+                                  visible={termVisible}
+                                  suspended={
+                                    terminalsSuspended ||
+                                    (!gridMode && !termVisible)
+                                  }
+                                  passiveResize={
+                                    gridMode &&
+                                    !isExpanded &&
+                                    projectSessions.find(
+                                      (s) => s.id === term.id,
+                                    )?.task === "Terminal"
+                                  }
+                                  hideCursor={
+                                    projectSessions.find(
+                                      (s) => s.id === term.id,
+                                    )?.task !== "Terminal" &&
+                                    projectSessions.some(
+                                      (s) => s.id === term.id,
+                                    )
+                                  }
+                                  onReconnect={() => reconnectTerminal(term.id)}
+                                  onPopOut={() => closeTerminalTab(term.id)}
+                                />
+                              )}
+                            </div>
+                          </div>
+                        );
+                      },
+                    )}
+                  </div>
                 </div>
-                </div>{/* close gridContainerRef */}
+                {/* close gridContainerRef */}
               </div>
             </>
           )}
 
           {/* Web page instances */}
-          {activeMode === 'terminal' && webPageInstances.map((wp) => {
-            const isActiveWP = activeWebPageId === wp.id && !showLauncher && !showAllTerminals;
-            return (
-              <div
-                key={wp.id}
-                className="h-full absolute inset-0"
-                style={{
-                  visibility: isActiveWP ? 'visible' : 'hidden',
-                  pointerEvents: isActiveWP ? 'auto' : 'none',
-                  zIndex: isActiveWP ? 2 : 0,
-                }}
-              >
-                <WebPageView
-                  url={wp.url}
-                  visible={isActiveWP && active}
-                  onUrlChange={(newUrl) => {
-                    setWebPageInstances((prev) =>
-                      prev.map((w) => (w.id === wp.id ? { ...w, url: newUrl } : w))
-                    );
+          {activeMode === "terminal" &&
+            webPageInstances.map((wp) => {
+              const isActiveWP =
+                activeWebPageId === wp.id && !showLauncher && !showAllTerminals;
+              return (
+                <div
+                  key={wp.id}
+                  className="h-full absolute inset-0"
+                  style={{
+                    visibility: isActiveWP ? "visible" : "hidden",
+                    pointerEvents: isActiveWP ? "auto" : "none",
+                    zIndex: isActiveWP ? 2 : 0,
                   }}
-                />
-              </div>
-            );
-          })}
+                >
+                  <WebPageView
+                    url={wp.url}
+                    visible={isActiveWP && active}
+                    onUrlChange={(newUrl) => {
+                      setWebPageInstances((prev) =>
+                        prev.map((w) =>
+                          w.id === wp.id ? { ...w, url: newUrl } : w,
+                        ),
+                      );
+                    }}
+                  />
+                </div>
+              );
+            })}
 
           {/* Explorer instances */}
           {explorerInstances.map((expl) => (
@@ -1523,10 +1994,18 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
               key={expl.id}
               className="h-full absolute inset-0"
               style={{
-                display: activeMode === 'explorer' && activeExplorerId === expl.id ? 'block' : 'none',
+                display:
+                  activeMode === "explorer" && activeExplorerId === expl.id
+                    ? "block"
+                    : "none",
               }}
             >
-              <FileExplorer rootPath={projectPath} instanceId={expl.id} refreshFilePath={gitSavedFile} onFileSaved={handleExplorerFileSaved} />
+              <FileExplorer
+                rootPath={projectPath}
+                instanceId={expl.id}
+                refreshFilePath={gitSavedFile}
+                onFileSaved={handleExplorerFileSaved}
+              />
             </div>
           ))}
 
@@ -1534,9 +2013,13 @@ export function ProjectView({ projectId, projectPath, projectName: _projectName,
           {/* Git panel */}
           <div
             className="h-full absolute inset-0"
-            style={{ display: activeMode === 'git' ? 'block' : 'none' }}
+            style={{ display: activeMode === "git" ? "block" : "none" }}
           >
-            <GitPanel projectPath={projectPath} isVisible={activeMode === 'git'} onFileSaved={handleGitFileSaved} />
+            <GitPanel
+              projectPath={projectPath}
+              isVisible={activeMode === "git"}
+              onFileSaved={handleGitFileSaved}
+            />
           </div>
         </div>
       </div>

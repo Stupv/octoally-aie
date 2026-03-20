@@ -1,5 +1,5 @@
-import { stat, open } from 'fs/promises';
-import type { FileHandle } from 'fs/promises';
+import { stat, open } from "fs/promises";
+import type { FileHandle } from "fs/promises";
 
 export interface JsonlEntry {
   type: string;
@@ -42,15 +42,15 @@ export class JsonlReader {
       const buf = Buffer.alloc(length);
       let fh: FileHandle | null = null;
       try {
-        fh = await open(this.filePath, 'r');
+        fh = await open(this.filePath, "r");
         await fh.read(buf, 0, length, markOffset);
       } finally {
         await fh?.close();
       }
 
-      const text = buf.toString('utf-8');
+      const text = buf.toString("utf-8");
       const entries: JsonlEntry[] = [];
-      for (const line of text.split('\n')) {
+      for (const line of text.split("\n")) {
         const trimmed = line.trim();
         if (!trimmed) continue;
         try {
@@ -70,17 +70,17 @@ export class JsonlReader {
     const parts: string[] = [];
 
     for (const entry of entries) {
-      if (entry.type === 'assistant' && entry.message?.content) {
+      if (entry.type === "assistant" && entry.message?.content) {
         for (const block of entry.message.content) {
-          if (block.type === 'text' && block.text) {
+          if (block.type === "text" && block.text) {
             parts.push(block.text);
           }
         }
-      } else if (entry.type === 'result' && typeof entry.result === 'string') {
+      } else if (entry.type === "result" && typeof entry.result === "string") {
         parts.push(entry.result);
       }
     }
 
-    return parts.join('\n');
+    return parts.join("\n");
   }
 }

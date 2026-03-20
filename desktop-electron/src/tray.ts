@@ -4,8 +4,8 @@ import {
   Menu,
   nativeImage,
   MenuItemConstructorOptions,
-} from 'electron';
-import * as path from 'path';
+} from "electron";
+import * as path from "path";
 import {
   isServerRunning,
   isServerReachable,
@@ -15,7 +15,7 @@ import {
   isServiceInstalled,
   toggleService,
   waitForServer,
-} from './server-manager';
+} from "./server-manager";
 
 let tray: Tray | null = null;
 
@@ -27,8 +27,8 @@ interface TrayOptions {
 export function createTray(opts: TrayOptions): Tray {
   // Resolve icon path — try development location first, then packaged
   const iconPaths = [
-    path.join(__dirname, '..', 'icons', 'tray-icon.png'),
-    path.join(process.resourcesPath || '', 'icons', 'tray-icon.png'),
+    path.join(__dirname, "..", "icons", "tray-icon.png"),
+    path.join(process.resourcesPath || "", "icons", "tray-icon.png"),
   ];
 
   let icon = nativeImage.createEmpty();
@@ -43,17 +43,17 @@ export function createTray(opts: TrayOptions): Tray {
   }
 
   tray = new Tray(icon);
-  tray.setToolTip('OctoAlly');
+  tray.setToolTip("OctoAlly");
 
   // Build initial menu (async — will set when ready)
   refreshMenu(opts);
 
-  tray.on('click', () => {
+  tray.on("click", () => {
     opts.showWindow();
   });
 
   // Refresh menu on right-click so status is always current when displayed
-  tray.on('right-click', () => {
+  tray.on("right-click", () => {
     refreshMenu(opts);
   });
 
@@ -71,28 +71,28 @@ async function refreshMenu(opts: TrayOptions) {
     cliManaged = isServerRunning(opts.cliPath);
     serviceInstalled = isServiceInstalled();
   } catch (err) {
-    console.warn('[OctoAlly] Tray menu status check failed:', err);
+    console.warn("[OctoAlly] Tray menu status check failed:", err);
   }
 
-  let statusLabel = 'Status: Stopped';
+  let statusLabel = "Status: Stopped";
   if (reachable && cliManaged) {
-    statusLabel = 'Status: Running';
+    statusLabel = "Status: Running";
   } else if (reachable && !cliManaged) {
-    statusLabel = 'Status: Running (external)';
+    statusLabel = "Status: Running (external)";
   }
 
   const template: MenuItemConstructorOptions[] = [
     {
-      label: 'Open Dashboard',
+      label: "Open Dashboard",
       click: () => opts.showWindow(),
     },
     {
       label: statusLabel,
       enabled: false,
     },
-    { type: 'separator' },
+    { type: "separator" },
     {
-      label: 'Start Server',
+      label: "Start Server",
       enabled: !reachable,
       click: async () => {
         await startServer(opts.cliPath);
@@ -101,7 +101,7 @@ async function refreshMenu(opts: TrayOptions) {
       },
     },
     {
-      label: 'Stop Server',
+      label: "Stop Server",
       enabled: reachable,
       click: async () => {
         if (cliManaged) {
@@ -112,26 +112,26 @@ async function refreshMenu(opts: TrayOptions) {
         refreshMenu(opts);
       },
     },
-    { type: 'separator' },
+    { type: "separator" },
     {
       label: serviceInstalled
-        ? 'Uninstall Service (auto-start)'
-        : 'Install Service (auto-start)',
+        ? "Uninstall Service (auto-start)"
+        : "Install Service (auto-start)",
       click: async () => {
         await toggleService(opts.cliPath);
         refreshMenu(opts);
       },
     },
-    { type: 'separator' },
+    { type: "separator" },
     {
-      label: 'Quit',
+      label: "Quit",
       click: async () => {
         if (!isServiceInstalled()) {
           if (cliManaged) {
-            console.log('[OctoAlly] Stopping CLI-managed server on quit...');
+            console.log("[OctoAlly] Stopping CLI-managed server on quit...");
             await stopServer(opts.cliPath);
           } else if (reachable) {
-            console.log('[OctoAlly] Stopping external server on quit...');
+            console.log("[OctoAlly] Stopping external server on quit...");
             await stopServerOnPort();
           }
         }

@@ -1,7 +1,14 @@
-import { useEffect, useState } from 'react';
-import { Settings, Mic, RefreshCw, X, ChevronDown, Volume2 } from 'lucide-react';
-import { invoke } from '../lib/tauri';
-import { isAudioCuesEnabled, setAudioCuesEnabled } from '../lib/audio-cues';
+import { useEffect, useState } from "react";
+import {
+  Settings,
+  Mic,
+  RefreshCw,
+  X,
+  ChevronDown,
+  Volume2,
+} from "lucide-react";
+import { invoke } from "../lib/tauri";
+import { isAudioCuesEnabled, setAudioCuesEnabled } from "../lib/audio-cues";
 
 interface AudioDevice {
   name: string;
@@ -29,8 +36,8 @@ function DeviceOption({
     <label
       className="flex items-start gap-3 p-3 rounded-lg cursor-pointer transition-colors"
       style={{
-        background: selected ? 'var(--accent)10' : 'var(--bg-secondary)',
-        border: `1px solid ${selected ? 'var(--accent)' : 'var(--border)'}`,
+        background: selected ? "var(--accent)10" : "var(--bg-secondary)",
+        border: `1px solid ${selected ? "var(--accent)" : "var(--border)"}`,
       }}
     >
       <input
@@ -45,11 +52,11 @@ function DeviceOption({
         <div className="flex items-center gap-2 flex-wrap">
           <Mic
             className="w-3.5 h-3.5 shrink-0"
-            style={{ color: 'var(--text-secondary)' }}
+            style={{ color: "var(--text-secondary)" }}
           />
           <span
             className="text-xs font-medium"
-            style={{ color: 'var(--text-primary)' }}
+            style={{ color: "var(--text-primary)" }}
           >
             {dev.displayName}
           </span>
@@ -57,8 +64,8 @@ function DeviceOption({
             <span
               className="text-[10px] px-1.5 py-0.5 rounded shrink-0"
               style={{
-                background: 'var(--bg-tertiary)',
-                color: 'var(--text-secondary)',
+                background: "var(--bg-tertiary)",
+                color: "var(--text-secondary)",
               }}
             >
               Default
@@ -67,7 +74,7 @@ function DeviceOption({
           {dev.isHardware && (
             <span
               className="text-[10px] px-1.5 py-0.5 rounded shrink-0 font-medium"
-              style={{ background: 'var(--accent)', color: 'white' }}
+              style={{ background: "var(--accent)", color: "white" }}
             >
               Recommended
             </span>
@@ -76,7 +83,7 @@ function DeviceOption({
         {dev.description && (
           <p
             className="text-[10px] mt-0.5 ml-5.5"
-            style={{ color: 'var(--text-secondary)' }}
+            style={{ color: "var(--text-secondary)" }}
           >
             {dev.description}
           </p>
@@ -99,7 +106,7 @@ export function MicSettingsModal({ onClose }: MicSettingsModalProps) {
     setLoading(true);
     setError(null);
     try {
-      const devs = await invoke<AudioDevice[]>('stt_list_devices');
+      const devs = await invoke<AudioDevice[]>("stt_list_devices");
       setDevices(devs);
       if (selectedDevice === null) {
         const recommended = devs.find((d) => d.isHardware);
@@ -117,10 +124,10 @@ export function MicSettingsModal({ onClose }: MicSettingsModalProps) {
   useEffect(() => {
     loadDevices();
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === "Escape") onClose();
     };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
   }, [onClose]);
 
   const handleSave = async () => {
@@ -129,7 +136,7 @@ export function MicSettingsModal({ onClose }: MicSettingsModalProps) {
       const defaultDevice = devices.find((d) => d.isDefault);
       const deviceArg =
         selectedDevice === defaultDevice?.name ? null : selectedDevice;
-      await invoke('stt_set_device', { deviceName: deviceArg });
+      await invoke("stt_set_device", { deviceName: deviceArg });
       onClose();
     } catch (e) {
       setError(String(e));
@@ -147,16 +154,16 @@ export function MicSettingsModal({ onClose }: MicSettingsModalProps) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ background: 'rgba(0,0,0,0.6)' }}
+      style={{ background: "rgba(0,0,0,0.6)" }}
       onClick={onClose}
     >
       <div
         className="flex flex-col rounded-lg shadow-2xl overflow-hidden"
         style={{
-          width: '100%',
-          maxWidth: '460px',
-          background: 'var(--bg-primary)',
-          border: '1px solid var(--border)',
+          width: "100%",
+          maxWidth: "460px",
+          background: "var(--bg-primary)",
+          border: "1px solid var(--border)",
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -165,13 +172,16 @@ export function MicSettingsModal({ onClose }: MicSettingsModalProps) {
           <div className="flex items-center gap-3">
             <div
               className="flex items-center justify-center w-9 h-9 rounded-full shrink-0"
-              style={{ background: 'var(--accent)20' }}
+              style={{ background: "var(--accent)20" }}
             >
-              <Settings className="w-5 h-5" style={{ color: 'var(--accent)' }} />
+              <Settings
+                className="w-5 h-5"
+                style={{ color: "var(--accent)" }}
+              />
             </div>
             <h3
               className="text-sm font-semibold"
-              style={{ color: 'var(--text-primary)' }}
+              style={{ color: "var(--text-primary)" }}
             >
               Microphone Settings
             </h3>
@@ -179,7 +189,7 @@ export function MicSettingsModal({ onClose }: MicSettingsModalProps) {
           <button
             onClick={onClose}
             className="p-1 rounded hover:opacity-80"
-            style={{ color: 'var(--text-secondary)' }}
+            style={{ color: "var(--text-secondary)" }}
           >
             <X className="w-4 h-4" />
           </button>
@@ -190,7 +200,7 @@ export function MicSettingsModal({ onClose }: MicSettingsModalProps) {
           <div className="flex items-center justify-between">
             <label
               className="text-xs font-medium"
-              style={{ color: 'var(--text-secondary)' }}
+              style={{ color: "var(--text-secondary)" }}
             >
               Select input device
             </label>
@@ -199,12 +209,14 @@ export function MicSettingsModal({ onClose }: MicSettingsModalProps) {
               disabled={loading}
               className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded"
               style={{
-                background: 'var(--bg-tertiary)',
-                color: 'var(--text-secondary)',
-                border: '1px solid var(--border)',
+                background: "var(--bg-tertiary)",
+                color: "var(--text-secondary)",
+                border: "1px solid var(--border)",
               }}
             >
-              <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw
+                className={`w-3 h-3 ${loading ? "animate-spin" : ""}`}
+              />
               Refresh
             </button>
           </div>
@@ -212,14 +224,14 @@ export function MicSettingsModal({ onClose }: MicSettingsModalProps) {
           {loading ? (
             <div
               className="text-xs text-center py-4"
-              style={{ color: 'var(--text-secondary)' }}
+              style={{ color: "var(--text-secondary)" }}
             >
               Scanning audio devices...
             </div>
           ) : devices.length === 0 ? (
             <div
               className="text-xs text-center py-4"
-              style={{ color: 'var(--error)' }}
+              style={{ color: "var(--error)" }}
             >
               No microphones found. Check your audio settings.
             </div>
@@ -243,11 +255,13 @@ export function MicSettingsModal({ onClose }: MicSettingsModalProps) {
                   <button
                     onClick={() => setShowAdvanced(!showAdvanced)}
                     className="flex items-center gap-1 text-[10px] py-1 w-full"
-                    style={{ color: 'var(--text-secondary)' }}
+                    style={{ color: "var(--text-secondary)" }}
                   >
                     <ChevronDown
                       className={`w-3 h-3 transition-transform ${
-                        showAdvanced || selectedInAdvanced ? 'rotate-0' : '-rotate-90'
+                        showAdvanced || selectedInAdvanced
+                          ? "rotate-0"
+                          : "-rotate-90"
                       }`}
                     />
                     Other devices ({advanced.length})
@@ -272,15 +286,27 @@ export function MicSettingsModal({ onClose }: MicSettingsModalProps) {
           {/* Audio cues toggle */}
           <div
             className="flex items-center justify-between p-3 rounded-lg"
-            style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
+            style={{
+              background: "var(--bg-secondary)",
+              border: "1px solid var(--border)",
+            }}
           >
             <div className="flex items-center gap-2">
-              <Volume2 className="w-3.5 h-3.5" style={{ color: 'var(--text-secondary)' }} />
+              <Volume2
+                className="w-3.5 h-3.5"
+                style={{ color: "var(--text-secondary)" }}
+              />
               <div>
-                <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
+                <span
+                  className="text-xs font-medium"
+                  style={{ color: "var(--text-primary)" }}
+                >
                   Audio cues
                 </span>
-                <p className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+                <p
+                  className="text-[10px]"
+                  style={{ color: "var(--text-secondary)" }}
+                >
                   Play sounds for voice state changes
                 </p>
               </div>
@@ -292,7 +318,12 @@ export function MicSettingsModal({ onClose }: MicSettingsModalProps) {
                 setAudioCuesEnabled(next);
               }}
               className="relative shrink-0 rounded-full transition-colors"
-              style={{ width: 32, height: 18, background: audioCues ? 'var(--accent)' : 'var(--bg-tertiary)', border: '1px solid var(--border)' }}
+              style={{
+                width: 32,
+                height: 18,
+                background: audioCues ? "var(--accent)" : "var(--bg-tertiary)",
+                border: "1px solid var(--border)",
+              }}
             >
               <span
                 className="absolute rounded-full transition-transform"
@@ -301,8 +332,8 @@ export function MicSettingsModal({ onClose }: MicSettingsModalProps) {
                   height: 12,
                   top: 2,
                   left: 2,
-                  background: 'white',
-                  transform: audioCues ? 'translateX(14px)' : 'translateX(0)',
+                  background: "white",
+                  transform: audioCues ? "translateX(14px)" : "translateX(0)",
                 }}
               />
             </button>
@@ -311,7 +342,7 @@ export function MicSettingsModal({ onClose }: MicSettingsModalProps) {
           {error && (
             <p
               className="text-xs p-2 rounded"
-              style={{ color: 'var(--error)', background: 'var(--error)10' }}
+              style={{ color: "var(--error)", background: "var(--error)10" }}
             >
               {error}
             </p>
@@ -322,17 +353,17 @@ export function MicSettingsModal({ onClose }: MicSettingsModalProps) {
         <div
           className="flex items-center justify-end gap-2 px-5 py-3"
           style={{
-            borderTop: '1px solid var(--border)',
-            background: 'var(--bg-secondary)',
+            borderTop: "1px solid var(--border)",
+            background: "var(--bg-secondary)",
           }}
         >
           <button
             onClick={onClose}
             className="px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
             style={{
-              background: 'var(--bg-tertiary)',
-              color: 'var(--text-secondary)',
-              border: '1px solid var(--border)',
+              background: "var(--bg-tertiary)",
+              color: "var(--text-secondary)",
+              border: "1px solid var(--border)",
             }}
           >
             Cancel
@@ -341,9 +372,9 @@ export function MicSettingsModal({ onClose }: MicSettingsModalProps) {
             onClick={handleSave}
             disabled={saving || !selectedDevice}
             className="px-3 py-1.5 rounded-md text-xs font-medium transition-colors disabled:opacity-50"
-            style={{ background: 'var(--accent)', color: '#fff' }}
+            style={{ background: "var(--accent)", color: "#fff" }}
           >
-            {saving ? 'Saving...' : 'Save'}
+            {saving ? "Saving..." : "Save"}
           </button>
         </div>
       </div>

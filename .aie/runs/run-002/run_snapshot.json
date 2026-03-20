@@ -1,0 +1,672 @@
+{
+  "metadata": {
+    "run_id": "run-002",
+    "project_name": "octoally",
+    "project_path": "/projects/external/octoally",
+    "started_at": "2026-03-20T12:24:03.107218Z",
+    "completed_at": null,
+    "status": "discovering",
+    "stages_completed": ["measure", "understand", "discover"],
+    "llm_calls": [
+      {
+        "model": "claude-haiku-4-5-20251001",
+        "stage": "1a_metric_parser",
+        "input_tokens": 3328,
+        "output_tokens": 2551,
+        "duration_seconds": 23.39
+      },
+      {
+        "model": "claude-sonnet-4-6",
+        "stage": "1b_dependency_mapper",
+        "input_tokens": 4,
+        "output_tokens": 2830,
+        "duration_seconds": 63.15
+      },
+      {
+        "model": "claude-sonnet-4-6",
+        "stage": "1c_doc_understanding",
+        "input_tokens": 3,
+        "output_tokens": 1815,
+        "duration_seconds": 47.66
+      },
+      {
+        "model": "claude-sonnet-4-6",
+        "stage": "2a_code_sweep",
+        "input_tokens": 4,
+        "output_tokens": 4363,
+        "duration_seconds": 75.61
+      },
+      {
+        "model": "claude-sonnet-4-6",
+        "stage": "2b_feature_sweep",
+        "input_tokens": 3,
+        "output_tokens": 3736,
+        "duration_seconds": 80.29
+      }
+    ],
+    "total_duration_seconds": 0.0,
+    "aie_version": "2.0.0",
+    "run_type": "single",
+    "reconciliation_method": "none"
+  },
+  "metrics_before": {
+    "project_name": "octoally",
+    "project_path": "/projects/external/octoally",
+    "metrics": {
+      "eslint_violations": {
+        "metric_id": "eslint_violations",
+        "value": 0.0,
+        "unit": "count",
+        "raw_output": "",
+        "details": {
+          "by_rule": {},
+          "by_severity": {},
+          "by_file": {}
+        },
+        "collected_at": "2026-03-20T12:24:03.592716Z",
+        "duration_seconds": 0.48
+      },
+      "prettier_violations": {
+        "metric_id": "prettier_violations",
+        "value": 85.0,
+        "unit": "count",
+        "raw_output": "Checking formatting...\n",
+        "details": {
+          "unformatted_files": [
+            ".aie/runs/run-001/run_snapshot.json",
+            ".github/workflows/desktop-build.yml",
+            ".github/workflows/release.yml",
+            "CLAUDE.md",
+            "dashboard/eslint.config.js",
+            "dashboard/README.md",
+            "dashboard/src/App.tsx",
+            "dashboard/src/components/ActiveEvents.tsx",
+            "dashboard/src/components/ActiveTerminals.tsx",
+            "dashboard/src/components/AgentGuide.tsx",
+            "dashboard/src/components/CloseTabModal.tsx",
+            "dashboard/src/components/ConfirmModal.tsx",
+            "dashboard/src/components/DesktopUpdateBanner.tsx",
+            "dashboard/src/components/DiffComponents.tsx",
+            "dashboard/src/components/EventStream.tsx",
+            "dashboard/src/components/FileExplorer.tsx",
+            "dashboard/src/components/GitPanel.tsx",
+            "dashboard/src/components/GlobalMicButton.tsx",
+            "dashboard/src/components/HistoryViewer.tsx",
+            "dashboard/src/components/MicSettingsModal.tsx",
+            "dashboard/src/components/ModelDownloadModal.tsx",
+            "dashboard/src/components/ModelSettingsModal.tsx",
+            "dashboard/src/components/NewTaskForm.tsx",
+            "dashboard/src/components/ProjectDashboard.tsx",
+            "dashboard/src/components/ProjectView.tsx",
+            "dashboard/src/components/SessionLauncher.tsx",
+            "dashboard/src/components/SessionMicButton.tsx",
+            "dashboard/src/components/SessionView.tsx",
+            "dashboard/src/components/SettingsModal.tsx",
+            "dashboard/src/components/Terminal.tsx",
+            "dashboard/src/components/WebPageView.tsx",
+            "dashboard/src/index.css",
+            "dashboard/src/lib/api.ts",
+            "dashboard/src/lib/audio-cues.ts",
+            "dashboard/src/lib/speech.ts",
+            "dashboard/src/lib/tauri.ts",
+            "dashboard/src/lib/trpc.ts",
+            "dashboard/src/lib/websocket.ts",
+            "dashboard/src/main.tsx",
+            "dashboard/vite.config.ts",
+            "desktop-electron/package.json",
+            "desktop-electron/scripts/build.mjs",
+            "desktop-electron/src/crypto-store.ts",
+            "desktop-electron/src/main.ts",
+            "desktop-electron/src/preload.ts",
+            "desktop-electron/src/server-manager.ts",
+            "desktop-electron/src/speech/audio.ts",
+            "desktop-electron/src/speech/cloud-whisper.ts",
+            "desktop-electron/src/speech/command-classifier.ts",
+            "desktop-electron/src/speech/commands.ts",
+            "desktop-electron/src/speech/download.ts",
+            "desktop-electron/src/speech/index.ts",
+            "desktop-electron/src/speech/vad.ts",
+            "desktop-electron/src/speech/whisper.ts",
+            "desktop-electron/src/tray.ts",
+            "desktop/gen/schemas/acl-manifests.json",
+            "desktop/gen/schemas/capabilities.json",
+            "desktop/gen/schemas/desktop-schema.json",
+            "desktop/gen/schemas/linux-schema.json",
+            "README.md",
+            "scripts/patches/SonaTrajectoryService.js",
+            "server/src/config.ts",
+            "server/src/db/index.ts",
+            "server/src/index.ts",
+            "server/src/lib/ansi.ts",
+            "server/src/lib/jsonl-reader.ts",
+            "server/src/lib/virtual-terminal.ts",
+            "server/src/routes/agent.ts",
+            "server/src/routes/events.ts",
+            "server/src/routes/files.ts",
+            "server/src/routes/git.ts",
+            "server/src/routes/hooks.ts",
+            "server/src/routes/projects.ts",
+            "server/src/routes/sessions.ts",
+            "server/src/routes/settings.ts",
+            "server/src/routes/stream.ts",
+            "server/src/routes/tasks.ts",
+            "server/src/routes/terminal.ts",
+            "server/src/services/event-store.ts",
+            "server/src/services/pty-worker.ts",
+            "server/src/services/session-manager.ts",
+            "server/src/services/session-state.ts",
+            "server/src/trpc/index.ts",
+            "server/src/trpc/router.ts",
+            "Code style issues found in 84 files. Run Prettier with --write to fix."
+          ]
+        },
+        "collected_at": "2026-03-20T12:24:07.709687Z",
+        "duration_seconds": 4.6
+      }
+    },
+    "collected_at": "2026-03-20T12:24:03.108762Z",
+    "total_duration_seconds": 4.6,
+    "errors": {}
+  },
+  "understanding": {
+    "metric_analyses": [
+      {
+        "metric_id": "eslint_violations",
+        "measures": "The count of linting violations detected by ESLint in the codebase. This includes rule violations such as code style issues, potential bugs, and security problems as defined by ESLint rules and project configuration.",
+        "computation_method": "npx eslint tool with JSON output format parser (eslint_json). Runs ESLint across specified source directories and parses the JSON output to count total violations.",
+        "influencing_factors": [
+          {
+            "factor": "ESLint rule configuration strictness",
+            "direction": "increases",
+            "magnitude": "high"
+          },
+          {
+            "factor": "Code quality and adherence to standards",
+            "direction": "decreases",
+            "magnitude": "high"
+          },
+          {
+            "factor": "Automated linting and formatting tools usage",
+            "direction": "decreases",
+            "magnitude": "high"
+          },
+          {
+            "factor": "Developer experience and coding practices",
+            "direction": "decreases",
+            "magnitude": "medium"
+          },
+          {
+            "factor": "Code review enforcement",
+            "direction": "decreases",
+            "magnitude": "medium"
+          },
+          {
+            "factor": "Codebase size and complexity",
+            "direction": "increases",
+            "magnitude": "medium"
+          }
+        ],
+        "theoretical_bounds": {
+          "floor": 0.0,
+          "ceiling": 10000.0,
+          "unit": "count"
+        },
+        "data_freshness": "Per-commit or on-demand (typically executed in CI/CD pipelines on each push)"
+      },
+      {
+        "metric_id": "prettier_violations",
+        "measures": "The count of source files that do not conform to the Prettier code formatting standards. This represents files that fail the Prettier format check, indicating they need reformatting.",
+        "computation_method": "npx prettier tool in check mode with prettier_check parser. Runs Prettier check across specified source directories and counts files that fail formatting compliance.",
+        "influencing_factors": [
+          {
+            "factor": "Prettier configuration consistency and enforcement",
+            "direction": "increases",
+            "magnitude": "high"
+          },
+          {
+            "factor": "Automated formatting on save in IDE",
+            "direction": "decreases",
+            "magnitude": "high"
+          },
+          {
+            "factor": "Developer adherence to formatting standards",
+            "direction": "decreases",
+            "magnitude": "high"
+          },
+          {
+            "factor": "Code review practices for formatting",
+            "direction": "decreases",
+            "magnitude": "medium"
+          },
+          {
+            "factor": "IDE and editor configuration setup",
+            "direction": "decreases",
+            "magnitude": "medium"
+          },
+          {
+            "factor": "Total number of files in codebase",
+            "direction": "increases",
+            "magnitude": "medium"
+          }
+        ],
+        "theoretical_bounds": {
+          "floor": 0.0,
+          "ceiling": 5000.0,
+          "unit": "count"
+        },
+        "data_freshness": "Per-commit or on-demand (typically executed in CI/CD pipelines on each push)"
+      }
+    ],
+    "dependency_map": {
+      "dependencies": [
+        {
+          "source_metric": "prettier_violations",
+          "target_metric": "eslint_violations",
+          "relationship": "causal",
+          "confidence": "inferred",
+          "explanation": "Modern TypeScript/JavaScript projects (like this one with dashboard/eslint.config.js) typically integrate Prettier via eslint-plugin-prettier or eslint-config-prettier. When this integration is active, every file that fails a Prettier check also generates one or more ESLint violations for the same formatting issues. This means prettier_violations are a measurable subset of eslint_violations — running 'prettier --write' on all failing files will mechanically reduce the eslint_violations count without touching any logic. The effect is one-directional and automated: fixing the source (Prettier) collapses a portion of the target (ESLint) simultaneously."
+        },
+        {
+          "source_metric": "eslint_violations",
+          "target_metric": "prettier_violations",
+          "relationship": "correlated",
+          "confidence": "inferred",
+          "explanation": "Files that accumulate ESLint violations tend to also fail Prettier checks. Both metrics degrade together because they share a single root condition: the absence of automated enforcement in the developer workflow (e.g., no pre-commit hooks via husky/lint-staged, no blocking CI gate). A developer who bypasses or ignores one tool is statistically likely to bypass the other. This is a co-occurrence correlation driven by process gaps rather than a direct technical dependency — fixing ESLint violations does not automatically fix Prettier violations, but both counts will fall together once tooling enforcement is re-established."
+        },
+        {
+          "source_metric": "eslint_violations",
+          "target_metric": "prettier_violations",
+          "relationship": "inverse",
+          "confidence": "speculative",
+          "explanation": "In edge cases, aggressive ESLint auto-fix runs (eslint --fix) can reformat code in ways that diverge from Prettier's opinion (e.g., quote style, trailing commas), temporarily increasing Prettier violations even as ESLint violations decrease. This is speculative for this project but is a known footgun when eslint-config-prettier is not installed or is misconfigured. If both tools are not kept in sync, fixing one can worsen the other."
+        }
+      ],
+      "critical_path": ["prettier_violations", "eslint_violations"],
+      "risk_clusters": [
+        {
+          "metrics": ["prettier_violations", "eslint_violations"],
+          "risk": "Unenforced tooling pipeline: Both metrics being non-zero simultaneously is the strongest signal that pre-commit hooks (husky/lint-staged) or CI lint/format gates are absent or bypassed. This is a process risk — the violations will accumulate continuously as new code is merged. The root fix is not to repair existing violations in isolation but to add blocking enforcement so the metrics cannot regress. Without this, any one-time cleanup effort has a half-life measured in days."
+        },
+        {
+          "metrics": ["prettier_violations"],
+          "risk": "Formatting debt and merge conflict amplification: Unformatted files across a multi-package monorepo (dashboard/, server/, desktop-electron/) inflate diff noise and increase the probability of spurious merge conflicts. With 60+ source files across three packages, even a moderate prettier_violations count means reviewers are reading formatting changes mixed with logic changes, increasing review fatigue and the chance of missing real bugs."
+        },
+        {
+          "metrics": ["eslint_violations"],
+          "risk": "Latent bug and security exposure: ESLint violations are heterogeneous — they include both cosmetic style issues AND high-severity findings (no-eval, no-unused-vars hiding dead code, security/detect-* rules, TypeScript strictness violations). A high eslint_violations count masks which violations are critical. Until the count is driven to zero and a zero-tolerance gate is enforced, the signal-to-noise ratio for catching real bugs via linting is degraded. The server/src/routes/ and desktop-electron/src/speech/ directories are highest-risk given their surface area for security-relevant code paths."
+        }
+      ]
+    },
+    "doc_understanding": {
+      "application_purpose": "OctoAlly is a local-first web dashboard for orchestrating AI coding sessions powered by Claude Code and RuFlo. It exists to give developers a unified UI to launch, monitor, and manage single-agent and multi-agent (hive-mind) coding sessions with real-time streaming, persistent terminals, built-in git tooling, and voice dictation.",
+      "target_users": [
+        "Software developers using Claude Code for AI-assisted coding",
+        "Power users running multi-agent RuFlo hive-mind workflows",
+        "Individual/solo developers wanting a local-first AI coding dashboard",
+        "Teams or individuals managing multiple projects with per-project agent configurations"
+      ],
+      "key_workflows": [
+        "Launch and monitor multi-agent hive-mind coding sessions via RuFlo",
+        "Run single-agent Claude Code sessions with custom agent personas",
+        "Manage interactive terminal sessions with tmux persistence and pop-out/adopt-back",
+        "Browse and test web apps in the built-in browser alongside coding sessions",
+        "Review, stage, and commit AI-generated git changes via the in-app git interface",
+        "Dictate instructions via local Whisper STT or cloud STT (OpenAI/Groq)",
+        "Add and configure projects with per-project RuFlo and agent definitions",
+        "Install and manage the server via CLI commands (start/stop/restart/update/logs)",
+        "Switch release channels (stable/beta/canary) and apply updates",
+        "Use the Electron desktop app for system-tray access and local STT"
+      ],
+      "known_limitations": [
+        "Windows is not supported — only Linux (Ubuntu/Debian) and macOS (Intel & Apple Silicon) are listed as supported platforms",
+        "Claude Code must be run manually at least once before OctoAlly can be installed (to accept terms and enable non-interactive mode with --dangerously-skip-permissions)",
+        "Authentication token (OCTOALLY_TOKEN) is documented as optional and left empty by default for local use — no built-in multi-user access control or role-based permissions",
+        "Voice dictation via local Whisper requires the desktop Electron app; web-only users cannot use local STT",
+        "RuFlo multi-agent features require separate RuFlo installation and per-project initialization — not bundled automatically",
+        "Pre-built releases are distributed via GitHub Releases (binary archives); no package manager (npm, brew, apt) distribution",
+        "License (Apache 2.0 + Commons Clause) prohibits selling products whose value derives substantially from OctoAlly, limiting commercial integration scenarios",
+        "Session persistence depends on tmux and dtach being available on the host system — no fallback documented if they are absent",
+        "SQLite is used as the sole database backend — no support for shared/remote databases, limiting multi-machine or team-shared state",
+        "No documented support for remote Claude Code instances or SSH-tunneled projects; appears to assume Claude Code runs on the same machine"
+      ],
+      "improvement_opportunities": [
+        "Windows platform support is entirely absent — adding a Windows installation path (WSL2 guide or native support) would significantly broaden the user base, as many developers use Windows",
+        "The OCTOALLY_TOKEN auth mechanism is empty by default with no guidance on securing a networked deployment — adding documentation and/or a setup wizard for token generation would prevent accidental unauthenticated exposure on shared networks",
+        "Error messages and troubleshooting guidance are not documented — adding a dedicated Troubleshooting section covering common failures (Claude Code not initialized, tmux not found, port conflicts) with remediation steps would reduce setup friction",
+        "There is no documented bulk session management — users cannot stop or restart all sessions at once via the CLI or UI. Adding a `octoally sessions stop-all` command and a UI bulk-action button would improve workflow control",
+        "The one-line installer pipes to bash with no integrity verification (checksum or signature) — adding a SHA256 checksum verification step to the install instructions and installer script would improve supply-chain security",
+        "RuFlo initialization is triggered by 'enabling RuFlo' on a project but the exact steps, required RuFlo version, and failure modes are not documented — a dedicated RuFlo setup guide with version compatibility matrix would reduce confusion",
+        "The built-in web browser tab has no documented limitations (CSP restrictions, iframe-blocked sites, auth flows beyond OAuth) — documenting known restrictions would set user expectations and reduce support requests",
+        "There is no REST API documentation — publishing an OpenAPI spec or a reference page for the Fastify routes would allow power users to integrate OctoAlly into their own tooling and CI pipelines",
+        "The git integration (diffs, staging, commits) has no documented support for push/pull/branch management — adding remote push and branch switching to the in-app git panel would make it a complete round-trip workflow without leaving the dashboard",
+        "Session output scrollback persistence relies on tmux but there is no documented retention limit or log export feature — adding a 'Download session log' button in the UI would let users archive or share AI session outputs",
+        "Cloud STT API keys are described as 'encrypted at rest with AES-256-GCM' but the key derivation mechanism and where the encryption key is stored are not explained — documenting or improving this (e.g., OS keychain integration) would strengthen trust for users with sensitive codebases",
+        "There is no mention of health-check or uptime monitoring for the OctoAlly server itself — adding a `/healthz` HTTP endpoint would allow external monitors (or systemd watchdog) to detect and recover from silent server failures"
+      ]
+    }
+  },
+  "discovery": {
+    "proposals": [
+      {
+        "id": "P-001",
+        "title": "Run prettier --write on dashboard/src/lib files",
+        "target_metric": "prettier_violations",
+        "target_outcome": null,
+        "category": "fix_lint",
+        "impact_estimate": {
+          "direction": "improve",
+          "magnitude": "medium",
+          "confidence": 0.85
+        },
+        "effort": "trivial",
+        "risk": "safe",
+        "description": "The five library files under dashboard/src/lib/ are widely imported across the entire frontend and are likely contributors to the 85 Prettier violations. Running `prettier --write` on each file will auto-fix all formatting issues (trailing commas, quote style, line-wrap, bracket spacing) without changing any logic. Because ESLint is already at 0 and no eslint-plugin-prettier integration is active (otherwise ESLint would also show violations), this is a pure Prettier fix with no downstream risk.",
+        "affected_files": [
+          "dashboard/src/lib/api.ts",
+          "dashboard/src/lib/speech.ts",
+          "dashboard/src/lib/audio-cues.ts",
+          "dashboard/src/lib/tauri.ts",
+          "dashboard/src/lib/websocket.ts"
+        ],
+        "affected_symbols": [],
+        "acceptance_criteria": [
+          "Running `prettier --check dashboard/src/lib/api.ts dashboard/src/lib/speech.ts dashboard/src/lib/audio-cues.ts dashboard/src/lib/tauri.ts dashboard/src/lib/websocket.ts` exits with code 0",
+          "No TypeScript compilation errors introduced",
+          "ESLint violation count remains 0"
+        ],
+        "touches_security": false,
+        "discovered_by": [],
+        "consensus_level": null
+      },
+      {
+        "id": "P-002",
+        "title": "Run prettier --write on the five largest dashboard components",
+        "target_metric": "prettier_violations",
+        "target_outcome": null,
+        "category": "fix_lint",
+        "impact_estimate": {
+          "direction": "improve",
+          "magnitude": "medium",
+          "confidence": 0.82
+        },
+        "effort": "trivial",
+        "risk": "safe",
+        "description": "FileExplorer.tsx (1540 lines), ProjectDashboard.tsx (1754 lines), ProjectView.tsx (1562 lines), GitPanel.tsx (782 lines), and Terminal.tsx (793 lines) are the five largest component files. Large files statistically carry more formatting drift; auto-formatting them with `prettier --write` will fix all whitespace, indentation, and style violations in one pass without touching runtime behaviour.",
+        "affected_files": [
+          "dashboard/src/components/FileExplorer.tsx",
+          "dashboard/src/components/ProjectDashboard.tsx",
+          "dashboard/src/components/ProjectView.tsx",
+          "dashboard/src/components/GitPanel.tsx",
+          "dashboard/src/components/Terminal.tsx"
+        ],
+        "affected_symbols": [],
+        "acceptance_criteria": [
+          "Running `prettier --check` on all five files exits with code 0",
+          "No TypeScript compilation errors introduced",
+          "ESLint violation count remains 0"
+        ],
+        "touches_security": false,
+        "discovered_by": [],
+        "consensus_level": null
+      },
+      {
+        "id": "P-003",
+        "title": "Run prettier --write on mid-size dashboard components batch 2",
+        "target_metric": "prettier_violations",
+        "target_outcome": null,
+        "category": "fix_lint",
+        "impact_estimate": {
+          "direction": "improve",
+          "magnitude": "medium",
+          "confidence": 0.8
+        },
+        "effort": "trivial",
+        "risk": "safe",
+        "description": "ModelSettingsModal.tsx (1143 lines), SessionLauncher.tsx (722 lines), ActiveTerminals.tsx (566 lines), AgentGuide.tsx (577 lines), and NewTaskForm.tsx (735 lines) are the next-largest component files. Formatting violations in this tier commonly arise from long JSX attribute lists and nested ternary expressions that need line-wrapping per the Prettier config. `prettier --write` normalises all of these mechanically.",
+        "affected_files": [
+          "dashboard/src/components/ModelSettingsModal.tsx",
+          "dashboard/src/components/SessionLauncher.tsx",
+          "dashboard/src/components/ActiveTerminals.tsx",
+          "dashboard/src/components/AgentGuide.tsx",
+          "dashboard/src/components/NewTaskForm.tsx"
+        ],
+        "affected_symbols": [],
+        "acceptance_criteria": [
+          "Running `prettier --check` on all five files exits with code 0",
+          "No TypeScript compilation errors introduced",
+          "ESLint violation count remains 0"
+        ],
+        "touches_security": false,
+        "discovered_by": [],
+        "consensus_level": null
+      },
+      {
+        "id": "P-004",
+        "title": "Run prettier --write on core server source files",
+        "target_metric": "prettier_violations",
+        "target_outcome": null,
+        "category": "fix_lint",
+        "impact_estimate": {
+          "direction": "improve",
+          "magnitude": "medium",
+          "confidence": 0.8
+        },
+        "effort": "trivial",
+        "risk": "safe",
+        "description": "session-manager.ts (2177 lines), agent.ts (511 lines), sessions.ts (357 lines), projects.ts (643 lines), and index.ts (308 lines) under server/src/ are the highest-line-count server files. Long function bodies and deeply nested async handlers are common sources of Prettier violations. Applying `prettier --write` on this batch addresses any trailing-comma, semicolon, and indentation drift without altering any logic.",
+        "affected_files": [
+          "server/src/services/session-manager.ts",
+          "server/src/routes/agent.ts",
+          "server/src/routes/sessions.ts",
+          "server/src/routes/projects.ts",
+          "server/src/index.ts"
+        ],
+        "affected_symbols": [],
+        "acceptance_criteria": [
+          "Running `prettier --check` on all five files exits with code 0",
+          "No TypeScript compilation errors introduced",
+          "ESLint violation count remains 0"
+        ],
+        "touches_security": false,
+        "discovered_by": [],
+        "consensus_level": null
+      },
+      {
+        "id": "P-005",
+        "title": "Run prettier --write on desktop-electron source files",
+        "target_metric": "prettier_violations",
+        "target_outcome": null,
+        "category": "fix_lint",
+        "impact_estimate": {
+          "direction": "improve",
+          "magnitude": "low",
+          "confidence": 0.78
+        },
+        "effort": "trivial",
+        "risk": "safe",
+        "description": "desktop-electron/src/speech/index.ts (988 lines), desktop-electron/src/main.ts (412 lines), desktop-electron/src/speech/whisper.ts (308 lines), desktop-electron/src/speech/commands.ts (452 lines), and desktop-electron/src/speech/audio.ts (246 lines) form the heaviest part of the Electron shell. These files live outside the dashboard Prettier scope but are part of the same monorepo workspace and are checked by the same `prettier --check` run. Formatting them eliminates any remaining violations in the Electron layer.",
+        "affected_files": [
+          "desktop-electron/src/speech/index.ts",
+          "desktop-electron/src/main.ts",
+          "desktop-electron/src/speech/whisper.ts",
+          "desktop-electron/src/speech/commands.ts",
+          "desktop-electron/src/speech/audio.ts"
+        ],
+        "affected_symbols": [],
+        "acceptance_criteria": [
+          "Running `prettier --check` on all five files exits with code 0",
+          "No TypeScript compilation errors introduced",
+          "ESLint violation count remains 0"
+        ],
+        "touches_security": false,
+        "discovered_by": [],
+        "consensus_level": null
+      },
+      {
+        "id": "F-001",
+        "title": "Add 'Download Session Log' button to SessionView",
+        "target_metric": null,
+        "target_outcome": "Users can export the full output of any session as a plain-text file for archival, debugging, or sharing with teammates, without needing to copy-paste from the terminal UI.",
+        "category": "feature_addition",
+        "impact_estimate": {
+          "direction": "improve",
+          "magnitude": "medium",
+          "confidence": 0.82
+        },
+        "effort": "small",
+        "risk": "safe",
+        "description": "The `sessions.output` API in `api.ts` already paginates raw output chunks, and `server/src/routes/sessions.ts` handles per-session queries. The improvement opportunity calls out that there is no log export feature despite tmux-based session output being available. This proposal adds: (1) a new server route `GET /sessions/:id/log` that streams the complete session output as `text/plain` by iterating all stored chunks via `querySessionOutput`/`serializeSessionOutput` in `session-manager.ts`; (2) a download helper in `api.ts` using a plain `fetch` + `URL.createObjectURL` pattern; and (3) a 'Download Log' icon button in `SessionView.tsx` that triggers the download when clicked. No new dependencies are required — all primitives already exist.",
+        "affected_files": [
+          "server/src/routes/sessions.ts",
+          "server/src/services/session-manager.ts",
+          "dashboard/src/lib/api.ts",
+          "dashboard/src/components/SessionView.tsx"
+        ],
+        "affected_symbols": [
+          "querySessionOutput",
+          "serializeSessionOutput",
+          "SessionView",
+          "api.sessions"
+        ],
+        "acceptance_criteria": [
+          "A 'Download Log' button is visible in the session header/toolbar of SessionView",
+          "Clicking the button triggers a browser file download named `<session-id>.log`",
+          "The downloaded file contains the full ANSI-stripped text output of the session in chronological order",
+          "The button is disabled (with a tooltip) when the session has no output yet",
+          "The server route returns 404 for unknown session IDs and 200 with text/plain content-type for valid ones"
+        ],
+        "touches_security": false,
+        "discovered_by": [],
+        "consensus_level": null
+      },
+      {
+        "id": "F-002",
+        "title": "Expose bulk 'Kill All Sessions' action in the UI and API",
+        "target_metric": null,
+        "target_outcome": "Users can stop all running or pending sessions for a project (or globally) in a single click, avoiding the need to individually terminate each session when resetting state or switching tasks.",
+        "category": "workflow_enhancement",
+        "impact_estimate": {
+          "direction": "improve",
+          "magnitude": "medium",
+          "confidence": 0.78
+        },
+        "effort": "trivial",
+        "risk": "moderate",
+        "description": "`session-manager.ts` already exports `killAllSessions()` but no HTTP route exposes it and the UI has no bulk-action control. The known limitation notes that users cannot stop all sessions at once via CLI or UI. This proposal wires the existing function to a new `DELETE /sessions` route in `sessions.ts` (accepting an optional `project_id` query param to scope the kill), adds `api.sessions.killAll(projectId?)` in `api.ts`, and places a confirmation-gated 'Stop All' button in `ProjectView.tsx` next to the session list header. A `ConfirmModal` (already exists) is reused to prevent accidental bulk-kills. No schema changes or new dependencies needed.",
+        "affected_files": [
+          "server/src/routes/sessions.ts",
+          "server/src/services/session-manager.ts",
+          "dashboard/src/lib/api.ts",
+          "dashboard/src/components/ProjectView.tsx",
+          "dashboard/src/components/ConfirmModal.tsx"
+        ],
+        "affected_symbols": [
+          "killAllSessions",
+          "api.sessions",
+          "ProjectView",
+          "ConfirmModal"
+        ],
+        "acceptance_criteria": [
+          "A 'Stop All' button appears in ProjectView when at least one session is running or pending",
+          "Clicking the button opens the existing ConfirmModal with a clear warning message",
+          "Confirming the modal calls DELETE /sessions?project_id=<id> and kills all in-scope sessions",
+          "The session list refreshes immediately after the bulk kill completes",
+          "Calling DELETE /sessions with no project_id kills all sessions server-wide (admin use case)",
+          "Sessions already in 'completed', 'failed', or 'cancelled' state are unaffected"
+        ],
+        "touches_security": false,
+        "discovered_by": [],
+        "consensus_level": null
+      },
+      {
+        "id": "F-003",
+        "title": "Add /healthz HTTP endpoint for external uptime monitoring and systemd watchdog",
+        "target_metric": null,
+        "target_outcome": "External monitors (Prometheus, UptimeKuma, systemd watchdog, or a homelab alerting stack) can probe OctoAlly's health with a single lightweight HTTP request and receive a machine-readable status response, enabling automated recovery from silent server failures.",
+        "category": "feature_addition",
+        "impact_estimate": {
+          "direction": "improve",
+          "magnitude": "low",
+          "confidence": 0.88
+        },
+        "effort": "trivial",
+        "risk": "safe",
+        "description": "The improvement opportunity calls out that there is no health-check endpoint to allow systemd watchdog or external monitors to detect silent failures. The existing `GET /health` route (consumed by `api.health()` in `api.ts`) returns metadata but is not documented as a structured health-check contract and does not set HTTP 503 on degraded state. This proposal adds a dedicated `GET /healthz` route in `server/src/index.ts` (or a new thin `health.ts` route file) that: returns `{status:'ok'}` with HTTP 200 when the DB is reachable and the session manager is running; returns `{status:'degraded', reason: '...'}` with HTTP 503 when the SQLite DB cannot be queried or the PTY worker pool is in an error state. The check is intentionally lightweight — a single `SELECT 1` via `getDb()`. No new dependencies needed.",
+        "affected_files": ["server/src/index.ts", "server/src/db/index.ts"],
+        "affected_symbols": ["start", "getDb", "initDb"],
+        "acceptance_criteria": [
+          "GET /healthz returns HTTP 200 with JSON body {status:'ok', version:'<semver>', uptime:<seconds>} under normal operation",
+          "GET /healthz returns HTTP 503 with {status:'degraded', reason:'<message>'} if the SQLite DB is unreachable",
+          "The endpoint responds within 200 ms under normal load (no expensive queries)",
+          "The endpoint is unauthenticated (no OCTOALLY_TOKEN check) so external monitors can probe without credentials",
+          "The existing /health route is unchanged for backward compatibility"
+        ],
+        "touches_security": false,
+        "discovered_by": [],
+        "consensus_level": null
+      }
+    ],
+    "validated_count": 8,
+    "discarded_count": 0,
+    "ranking": {
+      "ranked_proposals": [
+        {
+          "proposal_id": "P-001",
+          "priority_score": 24.0,
+          "rank": 1,
+          "rationale": "impact=medium effort=trivial risk=safe"
+        },
+        {
+          "proposal_id": "P-002",
+          "priority_score": 24.0,
+          "rank": 2,
+          "rationale": "impact=medium effort=trivial risk=safe"
+        },
+        {
+          "proposal_id": "P-003",
+          "priority_score": 24.0,
+          "rank": 3,
+          "rationale": "impact=medium effort=trivial risk=safe"
+        },
+        {
+          "proposal_id": "P-004",
+          "priority_score": 24.0,
+          "rank": 4,
+          "rationale": "impact=medium effort=trivial risk=safe"
+        },
+        {
+          "proposal_id": "F-001",
+          "priority_score": 18.0,
+          "rank": 5,
+          "rationale": "impact=medium effort=small risk=safe"
+        },
+        {
+          "proposal_id": "F-002",
+          "priority_score": 16.0,
+          "rank": 6,
+          "rationale": "impact=medium effort=trivial risk=moderate"
+        },
+        {
+          "proposal_id": "P-005",
+          "priority_score": 12.0,
+          "rank": 7,
+          "rationale": "impact=low effort=trivial risk=safe"
+        },
+        {
+          "proposal_id": "F-003",
+          "priority_score": 12.0,
+          "rank": 8,
+          "rationale": "impact=low effort=trivial risk=safe"
+        }
+      ],
+      "duplicates_removed": [],
+      "batch_groups": []
+    }
+  },
+  "formulation": null,
+  "execution": null,
+  "metrics_after": null,
+  "validation": null,
+  "review": null,
+  "scope": null
+}

@@ -5,7 +5,7 @@
  * Port of desktop/src/speech/audio.rs (which uses cpal).
  */
 
-import { spawn, execSync, ChildProcess } from 'child_process';
+import { spawn, execSync, ChildProcess } from "child_process";
 
 const TARGET_SAMPLE_RATE = 16000;
 
@@ -20,17 +20,17 @@ export interface AudioDevice {
 
 /** List available input devices */
 export function listInputDevices(): AudioDevice[] {
-  if (process.platform === 'linux') {
+  if (process.platform === "linux") {
     return listAlsaDevices();
   }
-  if (process.platform === 'darwin') {
+  if (process.platform === "darwin") {
     return listMacDevices();
   }
   return [
     {
-      name: 'default',
-      displayName: 'System Default',
-      description: 'Default microphone',
+      name: "default",
+      displayName: "System Default",
+      description: "Default microphone",
       isDefault: true,
       isHardware: true,
       formats: [],
@@ -41,9 +41,9 @@ export function listInputDevices(): AudioDevice[] {
 function listAlsaDevices(): AudioDevice[] {
   const devices: AudioDevice[] = [
     {
-      name: 'default',
-      displayName: 'System Default',
-      description: 'Recommended — uses your system\'s active microphone',
+      name: "default",
+      displayName: "System Default",
+      description: "Recommended — uses your system's active microphone",
       isDefault: true,
       isHardware: true,
       formats: [],
@@ -52,11 +52,16 @@ function listAlsaDevices(): AudioDevice[] {
 
   try {
     // List ALSA capture devices
-    const output = execSync('arecord -l 2>/dev/null', { encoding: 'utf-8', timeout: 3000 });
-    const lines = output.split('\n');
+    const output = execSync("arecord -l 2>/dev/null", {
+      encoding: "utf-8",
+      timeout: 3000,
+    });
+    const lines = output.split("\n");
     for (const line of lines) {
       // Format: "card N: Name [Description], device M: ..."
-      const match = line.match(/^card (\d+): (\S+) \[(.+?)\], device (\d+): (.+)/);
+      const match = line.match(
+        /^card (\d+): (\S+) \[(.+?)\], device (\d+): (.+)/,
+      );
       if (match) {
         const [, cardNum, , cardDesc, devNum] = match;
         const alsaName = `plughw:${cardNum},${devNum}`;
@@ -74,11 +79,11 @@ function listAlsaDevices(): AudioDevice[] {
 
   // Also add pipewire/pulse if available
   try {
-    execSync('which pw-record', { timeout: 2000 });
+    execSync("which pw-record", { timeout: 2000 });
     devices.splice(1, 0, {
-      name: 'pipewire',
-      displayName: 'PipeWire',
-      description: 'PipeWire audio server',
+      name: "pipewire",
+      displayName: "PipeWire",
+      description: "PipeWire audio server",
       isDefault: false,
       isHardware: false,
       formats: [],
@@ -92,9 +97,9 @@ function listMacDevices(): AudioDevice[] {
   // On macOS, just return system default — sox/rec handles device selection
   return [
     {
-      name: 'default',
-      displayName: 'System Default',
-      description: 'Default microphone',
+      name: "default",
+      displayName: "System Default",
+      description: "Default microphone",
       isDefault: true,
       isHardware: true,
       formats: [],
@@ -114,9 +119,9 @@ export class AudioCapture {
     private onData: (samples: Float32Array) => void,
     deviceName?: string,
   ) {
-    if (process.platform === 'linux') {
+    if (process.platform === "linux") {
       this.startLinux(deviceName);
-    } else if (process.platform === 'darwin') {
+    } else if (process.platform === "darwin") {
       this.startMac(deviceName);
     } else {
       throw new Error(`Unsupported platform: ${process.platform}`);
@@ -125,32 +130,39 @@ export class AudioCapture {
 
   private startLinux(deviceName?: string) {
     // Use pw-record if available (PipeWire), otherwise arecord (ALSA)
-    const usePipeWire = deviceName === 'pipewire' || this.hasPwRecord();
+    const usePipeWire = deviceName === "pipewire" || this.hasPwRecord();
 
-    if (usePipeWire && deviceName !== 'default') {
+    if (usePipeWire && deviceName !== "default") {
       // PipeWire: pw-record outputs raw PCM to stdout
       const args = [
-        '--format', 's16',
-        '--rate', String(TARGET_SAMPLE_RATE),
-        '--channels', '1',
-        '-',
+        "--format",
+        "s16",
+        "--rate",
+        String(TARGET_SAMPLE_RATE),
+        "--channels",
+        "1",
+        "-",
       ];
-      console.error(`[STT] Starting pw-record: ${args.join(' ')}`);
-      this.proc = spawn('pw-record', args);
+      console.error(`[STT] Starting pw-record: ${args.join(" ")}`);
+      this.proc = spawn("pw-record", args);
     } else {
       // ALSA: arecord outputs raw PCM to stdout
       const args = [
-        '-f', 'S16_LE',
-        '-r', String(TARGET_SAMPLE_RATE),
-        '-c', '1',
-        '-t', 'raw',
+        "-f",
+        "S16_LE",
+        "-r",
+        String(TARGET_SAMPLE_RATE),
+        "-c",
+        "1",
+        "-t",
+        "raw",
       ];
-      if (deviceName && deviceName !== 'default' && deviceName !== 'pipewire') {
-        args.push('-D', deviceName);
+      if (deviceName && deviceName !== "default" && deviceName !== "pipewire") {
+        args.push("-D", deviceName);
       }
-      args.push('-');
-      console.error(`[STT] Starting arecord: ${args.join(' ')}`);
-      this.proc = spawn('arecord', args);
+      args.push("-");
+      console.error(`[STT] Starting arecord: ${args.join(" ")}`);
+      this.proc = spawn("arecord", args);
     }
 
     this.pipeStdout();
@@ -159,30 +171,35 @@ export class AudioCapture {
   private startMac(_deviceName?: string) {
     // Use sox's rec command for macOS
     const args = [
-      '-q',           // quiet
-      '-r', String(TARGET_SAMPLE_RATE),
-      '-c', '1',      // mono
-      '-b', '16',     // 16-bit
-      '-e', 'signed', // signed int
-      '-t', 'raw',    // raw PCM
-      '-',            // stdout
+      "-q", // quiet
+      "-r",
+      String(TARGET_SAMPLE_RATE),
+      "-c",
+      "1", // mono
+      "-b",
+      "16", // 16-bit
+      "-e",
+      "signed", // signed int
+      "-t",
+      "raw", // raw PCM
+      "-", // stdout
     ];
-    console.error(`[STT] Starting rec: ${args.join(' ')}`);
-    this.proc = spawn('rec', args);
+    console.error(`[STT] Starting rec: ${args.join(" ")}`);
+    this.proc = spawn("rec", args);
     this.pipeStdout();
   }
 
   private pipeStdout() {
     if (!this.proc?.stdout) {
-      throw new Error('Failed to start audio capture process');
+      throw new Error("Failed to start audio capture process");
     }
 
-    this.proc.stderr?.on('data', (data: Buffer) => {
+    this.proc.stderr?.on("data", (data: Buffer) => {
       const msg = data.toString().trim();
       if (msg) console.error(`[STT] Audio process: ${msg}`);
     });
 
-    this.proc.stdout.on('data', (chunk: Buffer) => {
+    this.proc.stdout.on("data", (chunk: Buffer) => {
       // Convert S16_LE (signed 16-bit little-endian) to Float32
       const samples = new Float32Array(chunk.length / 2);
       for (let i = 0; i < samples.length; i++) {
@@ -191,7 +208,7 @@ export class AudioCapture {
       this.onData(samples);
     });
 
-    this.proc.on('close', (code) => {
+    this.proc.on("close", (code) => {
       console.error(`[STT] Audio capture process exited with code ${code}`);
       this.proc = null;
       if (this.onExit) this.onExit(code);
@@ -200,7 +217,7 @@ export class AudioCapture {
 
   private hasPwRecord(): boolean {
     try {
-      execSync('which pw-record', { timeout: 2000 });
+      execSync("which pw-record", { timeout: 2000 });
       return true;
     } catch {
       return false;
@@ -209,7 +226,7 @@ export class AudioCapture {
 
   stop() {
     if (this.proc) {
-      this.proc.kill('SIGTERM');
+      this.proc.kill("SIGTERM");
       this.proc = null;
     }
   }

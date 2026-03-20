@@ -1,19 +1,19 @@
-import Database from 'better-sqlite3';
-import { config } from '../config.js';
+import Database from "better-sqlite3";
+import { config } from "../config.js";
 
 let db: Database.Database;
 
 export function getDb(): Database.Database {
   if (!db) {
-    throw new Error('Database not initialized. Call initDb() first.');
+    throw new Error("Database not initialized. Call initDb() first.");
   }
   return db;
 }
 
 export function initDb(): void {
   db = new Database(config.dbPath);
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
+  db.pragma("journal_mode = WAL");
+  db.pragma("foreign_keys = ON");
 
   // Create tables
   db.exec(`
@@ -89,20 +89,48 @@ export function initDb(): void {
   `);
 
   // Migrations — idempotent column additions
-  try { db.exec('ALTER TABLE sessions ADD COLUMN claude_session_id TEXT'); } catch {}
-  try { db.exec('ALTER TABLE projects ADD COLUMN ruflo_prompt TEXT'); } catch {}
+  try {
+    db.exec("ALTER TABLE sessions ADD COLUMN claude_session_id TEXT");
+  } catch {}
+  try {
+    db.exec("ALTER TABLE projects ADD COLUMN ruflo_prompt TEXT");
+  } catch {}
   // Migrate old column name
-  try { db.exec('ALTER TABLE projects RENAME COLUMN claude_flow_prompt TO ruflo_prompt'); } catch {}
-  try { db.exec('ALTER TABLE projects ADD COLUMN openclaw_prompt TEXT'); } catch {}
-  try { db.exec('ALTER TABLE sessions ADD COLUMN terminal_cols INTEGER DEFAULT 120'); } catch {}
-  try { db.exec('ALTER TABLE sessions ADD COLUMN external_socket TEXT'); } catch {}
-  try { db.exec('ALTER TABLE projects ADD COLUMN default_web_url TEXT'); } catch {}
-  try { db.exec('ALTER TABLE events ADD COLUMN project_id TEXT REFERENCES projects(id)'); } catch {}
-  try { db.exec('ALTER TABLE sessions ADD COLUMN pre_popout_cols INTEGER'); } catch {}
-  try { db.exec('CREATE INDEX IF NOT EXISTS idx_events_project ON events(project_id)'); } catch {}
+  try {
+    db.exec(
+      "ALTER TABLE projects RENAME COLUMN claude_flow_prompt TO ruflo_prompt",
+    );
+  } catch {}
+  try {
+    db.exec("ALTER TABLE projects ADD COLUMN openclaw_prompt TEXT");
+  } catch {}
+  try {
+    db.exec(
+      "ALTER TABLE sessions ADD COLUMN terminal_cols INTEGER DEFAULT 120",
+    );
+  } catch {}
+  try {
+    db.exec("ALTER TABLE sessions ADD COLUMN external_socket TEXT");
+  } catch {}
+  try {
+    db.exec("ALTER TABLE projects ADD COLUMN default_web_url TEXT");
+  } catch {}
+  try {
+    db.exec(
+      "ALTER TABLE events ADD COLUMN project_id TEXT REFERENCES projects(id)",
+    );
+  } catch {}
+  try {
+    db.exec("ALTER TABLE sessions ADD COLUMN pre_popout_cols INTEGER");
+  } catch {}
+  try {
+    db.exec(
+      "CREATE INDEX IF NOT EXISTS idx_events_project ON events(project_id)",
+    );
+  } catch {}
 
   // Note: orphaned process cleanup is handled by cleanupStaleRunningSessions()
   // which is called after initDb() in index.ts — it kills processes AND marks DB records.
 
-  console.log('📦 Database initialized');
+  console.log("📦 Database initialized");
 }
