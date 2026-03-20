@@ -18,3 +18,6 @@ dist/
 .backups/
 CLAUDE.md.*.bak
 *.tar.gz
+
+# AIE state (auto-generated)
+.aie/
